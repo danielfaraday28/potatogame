@@ -1,0 +1,42 @@
+cmake_minimum_required(VERSION 3.16)
+project(BrotatoGame)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+find_package(SDL2 CONFIG REQUIRED)
+find_package(SDL2_image CONFIG REQUIRED)
+
+set(SOURCES
+    src/main.cpp
+    src/Game.cpp
+    src/Player.cpp
+    src/Enemy.cpp
+    src/Bullet.cpp
+    src/Vector2.cpp
+)
+
+set(HEADERS
+    src/Game.h
+    src/Player.h
+    src/Enemy.h
+    src/Bullet.h
+    src/Vector2.h
+)
+
+add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
+
+target_link_libraries(${PROJECT_NAME} 
+    PRIVATE
+    $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>
+    $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
+    $<IF:$<TARGET_EXISTS:SDL2_image::SDL2_image>,SDL2_image::SDL2_image,SDL2_image::SDL2_image-static>
+)
+
+# Copy monster assets to build directory
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${CMAKE_SOURCE_DIR}/monsters
+    $<TARGET_FILE_DIR:${PROJECT_NAME}>/monsters
+    COMMENT "Copying monster assets to build directory"
+)
