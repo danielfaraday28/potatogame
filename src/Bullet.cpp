@@ -1,13 +1,21 @@
 #include "Bullet.h"
 
-Bullet::Bullet(Vector2 pos, Vector2 dir, float speed) 
-    : position(pos), direction(dir.normalized()), speed(speed), radius(3), alive(true) {
+Bullet::Bullet(Vector2 pos, Vector2 dir, int dmg, float range, float speed) 
+    : position(pos), startPosition(pos), direction(dir.normalized()), 
+      speed(speed), radius(3), maxRange(range), damage(dmg), alive(true) {
 }
 
 void Bullet::update(float deltaTime) {
     position += direction * speed * deltaTime;
     
+    // Check if bullet is out of bounds
     if (position.x < 0 || position.x > 1024 || position.y < 0 || position.y > 768) {
+        alive = false;
+    }
+    
+    // Check if bullet has exceeded its range
+    float distanceTraveled = startPosition.distance(position);
+    if (distanceTraveled > maxRange) {
         alive = false;
     }
 }

@@ -2,26 +2,26 @@
 #include <SDL2/SDL.h>
 #include "Vector2.h"
 
-class Bullet {
+class ExperienceOrb {
 public:
-    Bullet(Vector2 pos, Vector2 dir, int damage = 10, float range = 200.0f, float speed = 400.0f);
+    ExperienceOrb(Vector2 pos, int expValue = 1);
     
     void update(float deltaTime);
     void render(SDL_Renderer* renderer);
     
     Vector2 getPosition() const { return position; }
     float getRadius() const { return radius; }
-    int getDamage() const { return damage; }
+    int getExperienceValue() const { return experienceValue; }
     bool isAlive() const { return alive; }
-    void destroy() { alive = false; }
+    void collect() { alive = false; }
     
 private:
     Vector2 position;
-    Vector2 startPosition;
-    Vector2 direction;
-    float speed;
     float radius;
-    float maxRange;
-    int damage;
+    int experienceValue;
     bool alive;
-};
+    float lifetime;
+    float maxLifetime;
+    float bobOffset;
+    float bobSpeed;
+}; 

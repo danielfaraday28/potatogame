@@ -230,6 +230,9 @@ SDL2_DIR:PATH=C:/Users/pcadmin/Documents/GitHub/vcpkg/installed/x64-windows/shar
 //The directory containing a CMake configuration file for SDL2_image.
 SDL2_image_DIR:PATH=C:/Users/pcadmin/Documents/GitHub/vcpkg/installed/x64-windows/share/SDL2_image
 
+//The directory containing a CMake configuration file for SDL2_ttf.
+SDL2_ttf_DIR:PATH=SDL2_ttf_DIR-NOTFOUND
+
 //Automatically copy dependencies into the output directory for
 // executables.
 VCPKG_APPLOCAL_DEPS:BOOL=ON
