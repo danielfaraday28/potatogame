@@ -1,6 +1,9 @@
 #pragma once
 #include <SDL2/SDL.h>
+#include <vector>
+#include <memory>
 #include "Vector2.h"
+#include "Weapon.h"
 
 struct PlayerStats {
     // Brotato-like stats
@@ -31,6 +34,11 @@ public:
     void updateShootDirection(const Vector2& mousePosition);
     void gainExperience(int exp);
     void levelUp();
+    
+    // Weapon management
+    void addWeapon(std::unique_ptr<Weapon> weapon);
+    void updateWeapons(float deltaTime, std::vector<std::unique_ptr<Bullet>>& bullets);
+    void renderWeapons(SDL_Renderer* renderer);
     
     Vector2 getPosition() const { return position; }
     float getRadius() const { return radius; }
@@ -63,4 +71,8 @@ private:
     int experience;
     int level;
     float healthRegenTimer;
+    
+    // Weapon inventory (max 6 weapons like Brotato)
+    std::vector<std::unique_ptr<Weapon>> weapons;
+    static const int MAX_WEAPONS = 6;
 };

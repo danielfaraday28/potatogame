@@ -22,6 +22,15 @@
     <ClCompile Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\ExperienceOrb.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\Material.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\Weapon.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\Shop.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\Game.h">
@@ -40,6 +49,15 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\ExperienceOrb.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\Material.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\Weapon.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\Shop.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

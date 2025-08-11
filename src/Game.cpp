@@ -11,7 +11,7 @@
 
 Game::Game() : window(nullptr), renderer(nullptr), running(false), 
                timeSinceLastSpawn(0), score(0), wave(1), mousePos(0, 0),
-               waveTimer(0), waveDuration(20.0f), waveActive(true) {
+               waveTimer(0), waveDuration(20.0f), waveActive(true), materialBag(0) {
 }
 
 Game::~Game() {
@@ -46,6 +46,8 @@ bool Game::init() {
     }
     
     player = std::make_unique<Player>(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2);
+    shop = std::make_unique<Shop>();
+    shop->setGame(this);
     running = true;
     
     return true;
@@ -81,19 +83,15 @@ void Game::handleEvents() {
     mousePos = Vector2(static_cast<float>(mouseX), static_cast<float>(mouseY));
     
     const Uint8* keyState = SDL_GetKeyboardState(nullptr);
-    player->handleInput(keyState);
     
-    // Update player's shoot direction to point towards mouse
-    player->updateShootDirection(mousePos);
-    
-    if (keyState[SDL_SCANCODE_SPACE] && player->canShoot()) {
-        bullets.push_back(std::make_unique<Bullet>(
-            player->getPosition(), 
-            player->getShootDirection(),
-            player->getStats().damage, // Use player's damage stat
-            player->getStats().range   // Use player's range stat
-        ));
-        player->shoot();
+    // Handle shop input if shop is active
+    if (shop->isShopActive()) {
+        shop->handleInput(keyState, *player);
+    } else {
+        player->handleInput(keyState);
+        
+        // Update player's shoot direction to point towards mouse
+        player->updateShootDirection(mousePos);
     }
 }
 
@@ -103,14 +101,29 @@ void Game::update(float deltaTime) {
         return;
     }
     
+    // Don't update game if shop is active
+    if (shop->isShopActive()) {
+        return;
+    }
+    
     // Update wave timer
     if (waveActive) {
         waveTimer += deltaTime;
         if (waveTimer >= waveDuration) {
-            // Wave completed - start next wave
+            // Wave completed - distribute bagged materials
+            if (materialBag > 0) {
+                player->gainMaterials(materialBag);
+                std::cout << "Collected " << materialBag << " materials from bag!" << std::endl;
+                materialBag = 0;
+            }
+            
+            // Open shop after wave completion
+            shop->openShop(wave);
+            
+            // Prepare for next wave
             wave++;
             waveTimer = 0;
-            std::cout << "Wave " << wave << " started!" << std::endl;
+            std::cout << "Wave " << wave << " will start after shop" << std::endl;
             
             // Increase wave duration by 5 seconds each wave, capped at 60 seconds
             if (waveDuration < 60.0f) {
@@ -121,6 +134,9 @@ void Game::update(float deltaTime) {
     }
     
     player->update(deltaTime);
+    
+    // Update weapons (they will fire in aim direction)
+    player->updateWeapons(deltaTime, bullets);
     
     for (auto& bullet : bullets) {
         bullet->update(deltaTime);
@@ -134,9 +150,14 @@ void Game::update(float deltaTime) {
         orb->update(deltaTime);
     }
     
+    for (auto& material : materials) {
+        material->update(deltaTime);
+    }
+    
     spawnEnemies();
     checkCollisions();
     updateExperienceCollection();
+    updateMaterialCollection();
     
     bullets.erase(std::remove_if(bullets.begin(), bullets.end(),
         [](const std::unique_ptr<Bullet>& bullet) {
@@ -146,14 +167,25 @@ void Game::update(float deltaTime) {
     enemies.erase(std::remove_if(enemies.begin(), enemies.end(),
         [&](const std::unique_ptr<Enemy>& enemy) {
             if (!enemy->isAlive()) {
-                // Drop experience orb where enemy died
-                experienceOrbs.push_back(std::make_unique<ExperienceOrb>(
-                    enemy->getPosition(), 
-                    1 + (wave / 5) // More exp in later waves
-                ));
+                // Brotato-style material drop system
+                float dropChance = getMaterialDropChance();
+                static std::random_device rd;
+                static std::mt19937 gen(rd());
+                std::uniform_real_distribution<float> dist(0.0f, 1.0f);
                 
-                // Give materials when enemy dies (like Brotato)
-                player->gainMaterials(2 + (wave / 3)); // More materials in later waves
+                if (dist(gen) < dropChance) {
+                    // Check material limit on map
+                    if (materials.size() < MAX_MATERIALS_ON_MAP) {
+                        int matValue = 1 + (wave / 3);
+                        int expValue = 1 + (wave / 5);
+                        materials.push_back(std::make_unique<Material>(
+                            enemy->getPosition(), matValue, expValue
+                        ));
+                    } else {
+                        // Add to bag if map is full
+                        materialBag += 1 + (wave / 3);
+                    }
+                }
                 
                 score += 10;
                 return true;
@@ -165,6 +197,16 @@ void Game::update(float deltaTime) {
         [](const std::unique_ptr<ExperienceOrb>& orb) {
             return !orb->isAlive();
         }), experienceOrbs.end());
+    
+    materials.erase(std::remove_if(materials.begin(), materials.end(),
+        [&](const std::unique_ptr<Material>& material) {
+            if (!material->isAlive()) {
+                // Add uncollected materials to bag
+                materialBag += material->getMaterialValue();
+                return true;
+            }
+            return false;
+        }), materials.end());
 }
 
 void Game::updateExperienceCollection() {
@@ -182,11 +224,44 @@ void Game::updateExperienceCollection() {
     }
 }
 
+void Game::updateMaterialCollection() {
+    Vector2 playerPos = player->getPosition();
+    float pickupRange = player->getStats().pickupRange;
+    
+    for (auto& material : materials) {
+        if (material->isAlive()) {
+            float distance = playerPos.distance(material->getPosition());
+            if (distance <= pickupRange) {
+                // Materials provide both experience and gold/materials
+                player->gainExperience(material->getExperienceValue());
+                player->gainMaterials(material->getMaterialValue());
+                material->collect();
+            }
+        }
+    }
+}
+
+float Game::getMaterialDropChance() const {
+    // Brotato's material drop formula:
+    // Starts at 100%, decreases 1.5% per wave number, minimum 50%
+    float baseChance = 1.0f;
+    float reduction = (wave - 1) * 0.015f;
+    float dropChance = baseChance - reduction;
+    
+    // Minimum 50% chance
+    if (dropChance < 0.5f) dropChance = 0.5f;
+    
+    // TODO: Implement horde wave reduction (-35%)
+    
+    return dropChance;
+}
+
 void Game::render() {
     SDL_SetRenderDrawColor(renderer, 20, 20, 30, 255);
     SDL_RenderClear(renderer);
     
     player->render(renderer);
+    player->renderWeapons(renderer);
     
     for (auto& bullet : bullets) {
         bullet->render(renderer);
@@ -200,7 +275,14 @@ void Game::render() {
         orb->render(renderer);
     }
     
+    for (auto& material : materials) {
+        material->render(renderer);
+    }
+    
     renderUI();
+    
+    // Render shop on top if active
+    shop->render(renderer, WINDOW_WIDTH, WINDOW_HEIGHT);
     
     SDL_RenderPresent(renderer);
 }
@@ -292,12 +374,18 @@ void Game::renderUI() {
     SDL_Rect expBg = {0, WINDOW_HEIGHT - 15, WINDOW_WIDTH, 15};
     SDL_RenderFillRect(renderer, &expBg);
     
-    // Experience progress
+    // Experience progress (Brotato-style)
     SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255); // Bright green
     int expToNext = player->getExperienceToNextLevel();
     int currentExp = player->getExperience();
-    int expForCurrentLevel = (player->getLevel() > 1) ? 
-        (10 + (player->getLevel() - 2) * 15 + (player->getLevel() - 2) * (player->getLevel() - 2) * 5) : 0;
+    
+    // Calculate XP for current level using Brotato formula
+    int expForCurrentLevel = 0;
+    if (player->getLevel() > 1) {
+        int currentLevel = player->getLevel();
+        expForCurrentLevel = (currentLevel + 3 - 1) * (currentLevel + 3 - 1);
+    }
+    
     int expInCurrentLevel = currentExp - expForCurrentLevel;
     int expNeededForCurrentLevel = expToNext - expForCurrentLevel;
     

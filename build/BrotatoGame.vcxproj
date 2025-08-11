@@ -452,12 +452,18 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     <ClCompile Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\Bullet.cpp" />
     <ClCompile Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\Vector2.cpp" />
     <ClCompile Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\ExperienceOrb.cpp" />
+    <ClCompile Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\Material.cpp" />
+    <ClCompile Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\Weapon.cpp" />
+    <ClCompile Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\Shop.cpp" />
     <ClInclude Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\Game.h" />
     <ClInclude Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\Player.h" />
     <ClInclude Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\Enemy.h" />
     <ClInclude Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\Bullet.h" />
     <ClInclude Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\Vector2.h" />
     <ClInclude Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\ExperienceOrb.h" />
+    <ClInclude Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\Material.h" />
+    <ClInclude Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\Weapon.h" />
+    <ClInclude Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\Shop.h" />
   </ItemGroup>
   <ItemGroup />
   <ItemGroup>

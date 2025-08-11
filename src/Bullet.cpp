@@ -1,8 +1,8 @@
 #include "Bullet.h"
 
-Bullet::Bullet(Vector2 pos, Vector2 dir, int dmg, float range, float speed) 
+Bullet::Bullet(Vector2 pos, Vector2 dir, int dmg, float range, float speed, BulletType type) 
     : position(pos), startPosition(pos), direction(dir.normalized()), 
-      speed(speed), radius(3), maxRange(range), damage(dmg), alive(true) {
+      speed(speed), radius(3), maxRange(range), damage(dmg), alive(true), bulletType(type) {
 }
 
 void Bullet::update(float deltaTime) {
@@ -23,7 +23,15 @@ void Bullet::update(float deltaTime) {
 void Bullet::render(SDL_Renderer* renderer) {
     if (!alive) return;
     
-    SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+    // Different colors for different weapon types
+    switch (bulletType) {
+        case BulletType::PISTOL:
+            SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255); // Yellow for pistol
+            break;
+        case BulletType::SMG:
+            SDL_SetRenderDrawColor(renderer, 255, 100, 100, 255); // Red for SMG
+            break;
+    }
     
     int centerX = (int)position.x;
     int centerY = (int)position.y;

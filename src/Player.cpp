@@ -8,6 +8,9 @@ Player::Player(float x, float y)
       experience(0), level(1), healthRegenTimer(0) {
     // Initialize health to match max health
     health = stats.maxHealth;
+    
+    // Start with a basic pistol
+    addWeapon(std::make_unique<Weapon>(WeaponType::PISTOL, WeaponTier::TIER_1));
 }
 
 void Player::update(float deltaTime) {
@@ -105,18 +108,29 @@ void Player::levelUp() {
     level++;
     std::cout << "Level up! Now level " << level << std::endl;
     
-    // Simple stat increases per level (like early Brotato characters)
-    stats.maxHealth += 5;
-    stats.damage += 1;
-    stats.moveSpeed += 2;
+    // Brotato-style: +1 Max HP per level
+    stats.maxHealth += 1;
     
-    // Heal player on level up
-    health = stats.maxHealth;
+    // Add weapons at certain levels for testing
+    if (level == 3 && weapons.size() < MAX_WEAPONS) {
+        addWeapon(std::make_unique<Weapon>(WeaponType::SMG, WeaponTier::TIER_1));
+        std::cout << "Got SMG!" << std::endl;
+    } else if (level == 5 && weapons.size() < MAX_WEAPONS) {
+        addWeapon(std::make_unique<Weapon>(WeaponType::PISTOL, WeaponTier::TIER_2));
+        std::cout << "Got Tier 2 Pistol!" << std::endl;
+    }
+    
+    // In Brotato, upgrades are chosen by the player at wave end
+    // For now, we'll apply small automatic upgrades
+    // TODO: Implement upgrade selection system
+    
+    // Don't heal on level up in Brotato
 }
 
 int Player::getExperienceToNextLevel() const {
-    // Experience curve: 10, 25, 45, 70, 100, etc.
-    return 10 + (level - 1) * 15 + (level - 1) * (level - 1) * 5;
+    // Brotato's experience formula: (Level + 3) * (Level + 3)
+    int nextLevel = level + 1;
+    return (nextLevel + 3) * (nextLevel + 3);
 }
 
 void Player::takeDamage(int damage) {
@@ -143,4 +157,22 @@ bool Player::canShoot() const {
 
 void Player::shoot() {
     timeSinceLastShot = 0;
+}
+
+void Player::addWeapon(std::unique_ptr<Weapon> weapon) {
+    if (weapons.size() < MAX_WEAPONS) {
+        weapons.push_back(std::move(weapon));
+    }
+}
+
+void Player::updateWeapons(float deltaTime, std::vector<std::unique_ptr<Bullet>>& bullets) {
+    for (auto& weapon : weapons) {
+        weapon->update(deltaTime, position, shootDirection, bullets, *this);
+    }
+}
+
+void Player::renderWeapons(SDL_Renderer* renderer) {
+    for (auto& weapon : weapons) {
+        weapon->render(renderer, position);
+    }
 }

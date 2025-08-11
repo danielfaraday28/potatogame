@@ -1,0 +1,15 @@
+# Normalise line endings across platforms
+# Use LF for text files; keep Windows script types as CRLF
+* text=auto eol=lf
+
+# Windows scripts should keep CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets
+*.png binary
+*.gif binary
+*.jpg binary
+*.jpeg binary
+*.ico binary

@@ -2,9 +2,14 @@
 #include <SDL2/SDL.h>
 #include "Vector2.h"
 
+enum class BulletType {
+    PISTOL,
+    SMG
+};
+
 class Bullet {
 public:
-    Bullet(Vector2 pos, Vector2 dir, int damage = 10, float range = 200.0f, float speed = 400.0f);
+    Bullet(Vector2 pos, Vector2 dir, int damage = 10, float range = 200.0f, float speed = 400.0f, BulletType type = BulletType::PISTOL);
     
     void update(float deltaTime);
     void render(SDL_Renderer* renderer);
@@ -24,4 +29,5 @@ private:
     float maxRange;
     int damage;
     bool alive;
+    BulletType bulletType;
 };
