@@ -1,5 +1,6 @@
 #include "Game.h"
 #include "SlimeEnemy.h"
+#include "PebblinEnemy.h"
 #include <cmath>
 #include <iostream>
 #include <random>
@@ -622,8 +623,25 @@ void Game::spawnEnemies() {
 
         // Queue a flashing red X indicator before actual spawn
         float telegraphDuration = spawnTelegraphSeconds; // configurable
-        bool spawnSlime = slimeChance(gen) < 0.5f; // 50% chance slime from wave 1
-        spawnIndicators.emplace_back(spawnPos, telegraphDuration, spawnSlime);
+        
+        // Determine enemy type based on wave
+        EnemySpawnType enemyType = EnemySpawnType::BASE;
+        if (wave >= 2) {
+            // From wave 2: 40% slime, 40% pebblin, 20% base
+            float typeRoll = slimeChance(gen);
+            if (typeRoll < 0.4f) {
+                enemyType = EnemySpawnType::SLIME;
+            } else if (typeRoll < 0.8f) {
+                enemyType = EnemySpawnType::PEBBLIN;
+            }
+        } else {
+            // Wave 1: 50% slime, 50% base (no pebblin yet)
+            if (slimeChance(gen) < 0.5f) {
+                enemyType = EnemySpawnType::SLIME;
+            }
+        }
+        
+        spawnIndicators.emplace_back(spawnPos, telegraphDuration, enemyType);
     }
 }
 
@@ -637,10 +655,17 @@ void Game::updateSpawnIndicators(float deltaTime) {
     remaining.reserve(spawnIndicators.size());
     for (auto& indicator : spawnIndicators) {
         if (indicator.isComplete()) {
-            if (indicator.spawnSlime) {
-                enemies.push_back(CreateSlimeEnemy(indicator.position, renderer));
-            } else {
-                enemies.push_back(std::make_unique<Enemy>(indicator.position, renderer));
+            switch (indicator.enemyType) {
+                case EnemySpawnType::SLIME:
+                    enemies.push_back(CreateSlimeEnemy(indicator.position, renderer));
+                    break;
+                case EnemySpawnType::PEBBLIN:
+                    enemies.push_back(CreatePebblinEnemy(indicator.position, renderer));
+                    break;
+                case EnemySpawnType::BASE:
+                default:
+                    enemies.push_back(std::make_unique<Enemy>(indicator.position, renderer));
+                    break;
             }
         } else {
             remaining.push_back(indicator);

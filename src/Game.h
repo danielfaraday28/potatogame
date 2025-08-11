@@ -13,15 +13,22 @@
 
 // Forward declarations
 class SlimeEnemy;
+class PebblinEnemy;
+
+enum class EnemySpawnType {
+    BASE,
+    SLIME,
+    PEBBLIN
+};
 
 struct SpawnIndicator {
     Vector2 position;
     float elapsed;
     float duration; // seconds
-    bool spawnSlime; // true -> spawn SlimeEnemy, false -> spawn base Enemy
+    EnemySpawnType enemyType;
     
-    SpawnIndicator(const Vector2& pos, float dur, bool slime)
-        : position(pos), elapsed(0.0f), duration(dur), spawnSlime(slime) {}
+    SpawnIndicator(const Vector2& pos, float dur, EnemySpawnType type)
+        : position(pos), elapsed(0.0f), duration(dur), enemyType(type) {}
     
     bool isComplete() const { return elapsed >= duration; }
 };

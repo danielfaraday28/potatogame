@@ -16,6 +16,9 @@
     <ClCompile Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\SlimeEnemy.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\PebblinEnemy.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\Bullet.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -46,6 +49,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\SlimeEnemy.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\PebblinEnemy.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="C:\Users\pcadmin\Documents\GitHub\potatogame\src\Bullet.h">

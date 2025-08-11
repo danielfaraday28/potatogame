@@ -2,7 +2,7 @@
 
 Bullet::Bullet(Vector2 pos, Vector2 dir, int dmg, float range, float speed, BulletType type, bool enemyOwnedFlag) 
     : position(pos), startPosition(pos), direction(dir.normalized()), 
-      speed(speed), radius(9), maxRange(range), damage(dmg), alive(true), bulletType(type),
+      speed(speed), radius(7), maxRange(range), damage(dmg), alive(true), bulletType(type),
       velocity(dir.normalized() * speed), gravity(550.0f), enemyOwned(enemyOwnedFlag) {
 }
 
@@ -31,17 +31,11 @@ void Bullet::update(float deltaTime) {
 void Bullet::render(SDL_Renderer* renderer) {
     if (!alive) return;
     
-    // Different colours for different projectile types
-    switch (bulletType) {
-        case BulletType::PISTOL:
-            SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
-            break;
-        case BulletType::SMG:
-            SDL_SetRenderDrawColor(renderer, 255, 100, 100, 255);
-            break;
-        case BulletType::ENEMY_LOB:
-            SDL_SetRenderDrawColor(renderer, 200, 50, 255, 255); // purple-ish for enemy lob
-            break;
+    // Color based on ownership: red for enemies, yellow for player
+    if (enemyOwned) {
+        SDL_SetRenderDrawColor(renderer, 255, 50, 50, 255); // Red for enemy bullets
+    } else {
+        SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255); // Yellow for player bullets
     }
     
     int centerX = (int)position.x;
