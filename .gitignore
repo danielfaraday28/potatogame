@@ -1,2 +1,4 @@
 # Ignore Claude/Cursor local settings
 .claude/
+\# Ignore accidental Windows device-name file
+nul
