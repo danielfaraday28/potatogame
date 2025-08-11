@@ -1,5 +1,6 @@
 #pragma once
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
 #include <vector>
 #include <memory>
 #include "Player.h"
@@ -9,6 +10,21 @@
 #include "Material.h"
 #include "Weapon.h"
 #include "Shop.h"
+
+// Forward declarations
+class SlimeEnemy;
+
+struct SpawnIndicator {
+    Vector2 position;
+    float elapsed;
+    float duration; // seconds
+    bool spawnSlime; // true -> spawn SlimeEnemy, false -> spawn base Enemy
+    
+    SpawnIndicator(const Vector2& pos, float dur, bool slime)
+        : position(pos), elapsed(0.0f), duration(dur), spawnSlime(slime) {}
+    
+    bool isComplete() const { return elapsed >= duration; }
+};
 
 class Game {
 public:
@@ -21,12 +37,18 @@ public:
     
     void renderNumber(int number, int x, int y, int scale = 1);
     void renderText(const char* text, int x, int y, int scale = 1);
+    void renderTTFText(const char* text, int x, int y, SDL_Color color, int fontSize = 16);
+    int getPlayerMaterials() const { return player ? player->getStats().materials : 0; }
+    const Player* getPlayer() const { return player.get(); }
+    SDL_Renderer* getRenderer() const { return renderer; }
     
 private:
     void handleEvents();
     void update(float deltaTime);
     void render();
     void spawnEnemies();
+    void updateSpawnIndicators(float deltaTime);
+    void renderSpawnIndicators();
     void checkCollisions();
     void updateExperienceCollection();
     void updateMaterialCollection();
@@ -40,6 +62,7 @@ private:
     std::unique_ptr<Player> player;
     std::vector<std::unique_ptr<Enemy>> enemies;
     std::vector<std::unique_ptr<Bullet>> bullets;
+    std::vector<SpawnIndicator> spawnIndicators;
     std::vector<std::unique_ptr<ExperienceOrb>> experienceOrbs;
     std::vector<std::unique_ptr<Material>> materials;
     
@@ -60,6 +83,12 @@ private:
     // Shop system
     std::unique_ptr<Shop> shop;
     
-    static const int WINDOW_WIDTH = 1024;
-    static const int WINDOW_HEIGHT = 768;
+    // TTF Font system
+    TTF_Font* defaultFont;
+    
+    // Telegraph duration for spawn indicators (seconds)
+    float spawnTelegraphSeconds = 2.0f;
+    
+    static const int WINDOW_WIDTH = 1920;
+    static const int WINDOW_HEIGHT = 1080;
 };

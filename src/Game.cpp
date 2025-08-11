@@ -1,4 +1,6 @@
 #include "Game.h"
+#include "SlimeEnemy.h"
+#include <cmath>
 #include <iostream>
 #include <random>
 #include <algorithm>
@@ -11,7 +13,8 @@
 
 Game::Game() : window(nullptr), renderer(nullptr), running(false), 
                timeSinceLastSpawn(0), score(0), wave(1), mousePos(0, 0),
-               waveTimer(0), waveDuration(20.0f), waveActive(true), materialBag(0) {
+               waveTimer(0), waveDuration(20.0f), waveActive(true), materialBag(0),
+               defaultFont(nullptr) {
 }
 
 Game::~Game() {
@@ -31,9 +34,15 @@ bool Game::init() {
         return false;
     }
     
+    // Initialize SDL_ttf
+    if (TTF_Init() == -1) {
+        std::cout << "SDL_ttf could not initialize! SDL_ttf Error: " << TTF_GetError() << std::endl;
+        return false;
+    }
+    
     window = SDL_CreateWindow("Brotato MVP", 
                              SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                             WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_SHOWN);
+                             WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_SHOWN | SDL_WINDOW_FULLSCREEN_DESKTOP);
     if (window == nullptr) {
         std::cout << "Window could not be created! SDL_Error: " << SDL_GetError() << std::endl;
         return false;
@@ -46,8 +55,39 @@ bool Game::init() {
     }
     
     player = std::make_unique<Player>(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2);
+    
+    // Initialize player with renderer for sprite loading
+    player->initialize(renderer);
+    
+    // Initialize player weapons with renderer for sprite loading
+    player->initializeWeapons(renderer);
+    
     shop = std::make_unique<Shop>();
     shop->setGame(this);
+    shop->loadAssets(renderer);
+    
+    // Try to load fonts in order of preference
+    const char* fontPaths[] = {
+        "assets/fonts/default.ttf",
+        "C:/Windows/Fonts/arial.ttf",
+        "C:/Windows/Fonts/calibri.ttf",
+        "C:/Windows/Fonts/consola.ttf"
+    };
+    
+    defaultFont = nullptr;
+    for (const char* fontPath : fontPaths) {
+        defaultFont = TTF_OpenFont(fontPath, 16);
+        if (defaultFont) {
+            std::cout << "Loaded font: " << fontPath << std::endl;
+            break;
+        }
+    }
+    
+    if (!defaultFont) {
+        std::cout << "No TTF font available - using bitmap fallback" << std::endl;
+        // Continue without TTF font - will fall back to bitmap rendering
+    }
+    
     running = true;
     
     return true;
@@ -87,6 +127,11 @@ void Game::handleEvents() {
     // Handle shop input if shop is active
     if (shop->isShopActive()) {
         shop->handleInput(keyState, *player);
+        
+        // Handle mouse input for shop
+        Uint32 mouseState = SDL_GetMouseState(&mouseX, &mouseY);
+        bool mousePressed = (mouseState & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
+        shop->handleMouseInput(mouseX, mouseY, mousePressed, *player);
     } else {
         player->handleInput(keyState);
         
@@ -143,8 +188,10 @@ void Game::update(float deltaTime) {
     }
     
     for (auto& enemy : enemies) {
-        enemy->update(deltaTime, player->getPosition());
+        enemy->update(deltaTime, player->getPosition(), bullets);
     }
+
+    updateSpawnIndicators(deltaTime);
     
     for (auto& orb : experienceOrbs) {
         orb->update(deltaTime);
@@ -257,7 +304,7 @@ float Game::getMaterialDropChance() const {
 }
 
 void Game::render() {
-    SDL_SetRenderDrawColor(renderer, 20, 20, 30, 255);
+    SDL_SetRenderDrawColor(renderer, 120, 110, 100, 255); // Light brown/tan background for better visibility
     SDL_RenderClear(renderer);
     
     player->render(renderer);
@@ -270,6 +317,9 @@ void Game::render() {
     for (auto& enemy : enemies) {
         enemy->render(renderer);
     }
+
+    // Spawn indicators on top of background but beneath UI
+    renderSpawnIndicators();
     
     for (auto& orb : experienceOrbs) {
         orb->render(renderer);
@@ -345,13 +395,24 @@ void Game::renderUI() {
     int materialX = 70 - (materialDigits * 6); // Center the number
     renderNumber(player->getStats().materials, materialX, 142, 2);
     
-    // Center top: Wave number with actual text
+    // Center top: Wave number with TTF text
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 200); // Semi-transparent black
     SDL_Rect waveBg = {WINDOW_WIDTH/2 - 80, 20, 160, 40};
     SDL_RenderFillRect(renderer, &waveBg);
     
-    renderText("WAVE ", WINDOW_WIDTH/2 - 50, 30, 2);
-    renderNumber(wave, WINDOW_WIDTH/2 - 10, 30, 2);
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255); // White border
+    SDL_RenderDrawRect(renderer, &waveBg);
+    
+    // Use TTF font for cleaner wave display, fallback to bitmap if TTF fails
+    if (defaultFont) {
+        SDL_Color waveColor = {255, 255, 255, 255};
+        std::string waveText = "WAVE " + std::to_string(wave);
+        renderTTFText(waveText.c_str(), WINDOW_WIDTH/2 - 40, 28, waveColor, 18);
+    } else {
+        // Fallback to bitmap rendering with better spacing
+        renderText("WAVE", WINDOW_WIDTH/2 - 50, 30, 2);
+        renderNumber(wave, WINDOW_WIDTH/2 + 10, 30, 2);
+    }
     
     // Center top: Countdown timer with actual numbers
     float timeLeft = waveDuration - waveTimer;
@@ -364,10 +425,17 @@ void Game::renderUI() {
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255); // White border
     SDL_RenderDrawRect(renderer, &timerBg);
     
-    // Large timer numbers (centered)
-    int timerDigits = std::to_string(seconds).length();
-    int timerX = WINDOW_WIDTH/2 - (timerDigits * 12); // Center the number
-    renderNumber(seconds, timerX, 85, 4); // Larger scale for timer
+    // Large timer numbers using TTF (centered), fallback to bitmap
+    if (defaultFont) {
+        SDL_Color timerColor = {255, 255, 255, 255};
+        std::string timerText = std::to_string(seconds);
+        renderTTFText(timerText.c_str(), WINDOW_WIDTH/2 - 15, 80, timerColor, 28);
+    } else {
+        // Fallback to bitmap rendering
+        int timerDigits = std::to_string(seconds).length();
+        int timerX = WINDOW_WIDTH/2 - (timerDigits * 12);
+        renderNumber(seconds, timerX, 85, 4);
+    }
     
     // Experience bar (bottom of screen)
     SDL_SetRenderDrawColor(renderer, 0, 100, 0, 255); // Dark green background
@@ -456,6 +524,8 @@ void Game::renderText(const char* text, int x, int y, int scale) {
         {'G', {0b01110, 0b10001, 0b10000, 0b10111, 0b10001, 0b10001, 0b01110}},
         {'H', {0b10001, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001}},
         {'I', {0b01110, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110}},
+        {'J', {0b00111, 0b00010, 0b00010, 0b00010, 0b00010, 0b10010, 0b01100}},
+        {'K', {0b10001, 0b10010, 0b10100, 0b11000, 0b10100, 0b10010, 0b10001}},
         {'L', {0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b11111}},
         {'M', {0b10001, 0b11011, 0b10101, 0b10101, 0b10001, 0b10001, 0b10001}},
         {'N', {0b10001, 0b11001, 0b10101, 0b10011, 0b10001, 0b10001, 0b10001}},
@@ -467,8 +537,14 @@ void Game::renderText(const char* text, int x, int y, int scale) {
         {'U', {0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110}},
         {'V', {0b10001, 0b10001, 0b10001, 0b10001, 0b01010, 0b01010, 0b00100}},
         {'W', {0b10001, 0b10001, 0b10001, 0b10101, 0b10101, 0b11011, 0b10001}},
+        {'X', {0b10001, 0b01010, 0b00100, 0b00100, 0b00100, 0b01010, 0b10001}},
+        {'Y', {0b10001, 0b10001, 0b01010, 0b00100, 0b00100, 0b00100, 0b00100}},
+        {'Z', {0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b10000, 0b11111}},
         {'.', {0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00100}},
         {'/', {0b00001, 0b00010, 0b00010, 0b00100, 0b00100, 0b01000, 0b10000}},
+        {'|', {0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100}},
+        {'=', {0b00000, 0b00000, 0b11111, 0b00000, 0b11111, 0b00000, 0b00000}},
+        {':', {0b00000, 0b00100, 0b00000, 0b00000, 0b00000, 0b00100, 0b00000}},
         {' ', {0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000}}
     };
     
@@ -500,6 +576,33 @@ void Game::renderText(const char* text, int x, int y, int scale) {
     }
 }
 
+void Game::renderTTFText(const char* text, int x, int y, SDL_Color color, int fontSize) {
+    if (!defaultFont) return; // Fall back to bitmap rendering if no TTF font
+    
+    // Create surface from text
+    SDL_Surface* textSurface = TTF_RenderText_Blended(defaultFont, text, color);
+    if (!textSurface) {
+        std::cout << "Unable to render text surface! SDL_ttf Error: " << TTF_GetError() << std::endl;
+        return;
+    }
+    
+    // Create texture from surface
+    SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+    if (!textTexture) {
+        std::cout << "Unable to create texture from text! SDL Error: " << SDL_GetError() << std::endl;
+        SDL_FreeSurface(textSurface);
+        return;
+    }
+    
+    // Render texture
+    SDL_Rect destRect = {x, y, textSurface->w, textSurface->h};
+    SDL_RenderCopy(renderer, textTexture, nullptr, &destRect);
+    
+    // Clean up
+    SDL_FreeSurface(textSurface);
+    SDL_DestroyTexture(textTexture);
+}
+
 void Game::spawnEnemies() {
     timeSinceLastSpawn += 0.016f;
     
@@ -511,39 +614,78 @@ void Game::spawnEnemies() {
         
         static std::random_device rd;
         static std::mt19937 gen(rd());
-        std::uniform_int_distribution<> side(0, 3);
-        std::uniform_real_distribution<> pos(0.0, 1.0);
-        
-        Vector2 spawnPos;
-        int spawnSide = side(gen);
-        
-        switch (spawnSide) {
-            case 0:
-                spawnPos = Vector2(-20, pos(gen) * WINDOW_HEIGHT);
-                break;
-            case 1:
-                spawnPos = Vector2(WINDOW_WIDTH + 20, pos(gen) * WINDOW_HEIGHT);
-                break;
-            case 2:
-                spawnPos = Vector2(pos(gen) * WINDOW_WIDTH, -20);
-                break;
-            case 3:
-                spawnPos = Vector2(pos(gen) * WINDOW_WIDTH, WINDOW_HEIGHT + 20);
-                break;
+        std::uniform_real_distribution<float> xdist(0.0f, static_cast<float>(WINDOW_WIDTH));
+        std::uniform_real_distribution<float> ydist(0.0f, static_cast<float>(WINDOW_HEIGHT));
+        std::uniform_real_distribution<float> slimeChance(0.0f, 1.0f);
+
+        Vector2 spawnPos(xdist(gen), ydist(gen));
+
+        // Queue a flashing red X indicator before actual spawn
+        float telegraphDuration = spawnTelegraphSeconds; // configurable
+        bool spawnSlime = slimeChance(gen) < 0.5f; // 50% chance slime from wave 1
+        spawnIndicators.emplace_back(spawnPos, telegraphDuration, spawnSlime);
+    }
+}
+
+void Game::updateSpawnIndicators(float deltaTime) {
+    for (auto& indicator : spawnIndicators) {
+        indicator.elapsed += deltaTime;
+    }
+
+    // Spawn enemies for completed indicators, then remove them
+    std::vector<SpawnIndicator> remaining;
+    remaining.reserve(spawnIndicators.size());
+    for (auto& indicator : spawnIndicators) {
+        if (indicator.isComplete()) {
+            if (indicator.spawnSlime) {
+                enemies.push_back(CreateSlimeEnemy(indicator.position, renderer));
+            } else {
+                enemies.push_back(std::make_unique<Enemy>(indicator.position, renderer));
+            }
+        } else {
+            remaining.push_back(indicator);
         }
-        
-        enemies.push_back(std::make_unique<Enemy>(spawnPos, renderer));
+    }
+    spawnIndicators.swap(remaining);
+}
+
+void Game::renderSpawnIndicators() {
+    for (auto& indicator : spawnIndicators) {
+        // Flashing red X effect, fades in/out over duration
+        float t = indicator.elapsed;
+        float flash = fmodf(t * 6.0f, 2.0f) < 1.0f ? 255.0f : 80.0f; // blink ~3 Hz
+        Uint8 alpha = static_cast<Uint8>(flash);
+        SDL_SetRenderDrawColor(renderer, 200, 0, 0, alpha);
+
+        int size = 14; // cross arm length
+        int cx = static_cast<int>(indicator.position.x);
+        int cy = static_cast<int>(indicator.position.y);
+        // 4 short lines to make an X
+        for (int i = -size; i <= size; ++i) {
+            SDL_RenderDrawPoint(renderer, cx + i, cy + i);
+            SDL_RenderDrawPoint(renderer, cx + i, cy - i);
+        }
     }
 }
 
 void Game::checkCollisions() {
     for (auto& bullet : bullets) {
+        if (!bullet->isAlive()) continue;
+        if (bullet->isEnemyOwned()) {
+            // enemy bullets damage the player
+            float d = bullet->getPosition().distance(player->getPosition());
+            if (d < bullet->getRadius() + player->getRadius()) {
+                player->takeDamage(bullet->getDamage());
+                bullet->destroy();
+            }
+            continue;
+        }
         for (auto& enemy : enemies) {
             if (bullet->isAlive() && enemy->isAlive()) {
                 float distance = bullet->getPosition().distance(enemy->getPosition());
                 if (distance < bullet->getRadius() + enemy->getRadius()) {
                     bullet->destroy();
-                    enemy->hit(); // Trigger hit animation
+                    enemy->hit();
                     enemy->destroy();
                 }
             }
@@ -562,6 +704,11 @@ void Game::checkCollisions() {
 }
 
 void Game::cleanup() {
+    if (defaultFont) {
+        TTF_CloseFont(defaultFont);
+        defaultFont = nullptr;
+    }
+    
     if (renderer) {
         SDL_DestroyRenderer(renderer);
         renderer = nullptr;
@@ -572,6 +719,7 @@ void Game::cleanup() {
         window = nullptr;
     }
     
+    TTF_Quit();
     IMG_Quit();
     SDL_Quit();
 }

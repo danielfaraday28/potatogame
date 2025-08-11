@@ -1,6 +1,9 @@
 #include "Enemy.h"
 #include <cstdlib>
 #include <iostream>
+#include <vector>
+#include <memory>
+#include "Bullet.h"
 
 Enemy::Enemy(Vector2 pos, SDL_Renderer* renderer) 
     : position(pos), velocity(0, 0), radius(30), speed(80), 
@@ -44,7 +47,7 @@ SDL_Texture* Enemy::loadTexture(const char* path, SDL_Renderer* renderer) {
     return texture;
 }
 
-void Enemy::update(float deltaTime, Vector2 playerPos) {
+void Enemy::update(float deltaTime, Vector2 playerPos, std::vector<std::unique_ptr<Bullet>>& /*bullets*/) {
     Vector2 direction = (playerPos - position).normalized();
     velocity = direction * speed;
     position += velocity * deltaTime;

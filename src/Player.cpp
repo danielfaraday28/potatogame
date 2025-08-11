@@ -1,11 +1,12 @@
 #include "Player.h"
 #include <cmath>
 #include <iostream>
+#include <SDL2/SDL_image.h>
 
 Player::Player(float x, float y) 
     : position(x, y), velocity(0, 0), shootDirection(1, 0), 
       radius(20), health(100), shootCooldown(0.15f), timeSinceLastShot(0),
-      experience(0), level(1), healthRegenTimer(0) {
+      experience(0), level(1), healthRegenTimer(0), playerTexture(nullptr) {
     // Initialize health to match max health
     health = stats.maxHealth;
     
@@ -13,13 +14,31 @@ Player::Player(float x, float y)
     addWeapon(std::make_unique<Weapon>(WeaponType::PISTOL, WeaponTier::TIER_1));
 }
 
+void Player::initialize(SDL_Renderer* renderer) {
+    // Load brick character sprite
+    SDL_Surface* surface = IMG_Load("assets/character/brick.png");
+    if (!surface) {
+        std::cout << "Failed to load brick.png! SDL_image Error: " << IMG_GetError() << std::endl;
+        return;
+    }
+    
+    playerTexture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+    
+    if (!playerTexture) {
+        std::cout << "Failed to create texture from brick.png! SDL Error: " << SDL_GetError() << std::endl;
+    } else {
+        std::cout << "Successfully loaded brick character sprite!" << std::endl;
+    }
+}
+
 void Player::update(float deltaTime) {
     position += velocity * deltaTime;
     
     if (position.x < radius) position.x = radius;
-    if (position.x > 1024 - radius) position.x = 1024 - radius;
+    if (position.x > 1920 - radius) position.x = 1920 - radius;
     if (position.y < radius) position.y = radius;
-    if (position.y > 768 - radius) position.y = 768 - radius;
+    if (position.y > 1080 - radius) position.y = 1080 - radius;
     
     velocity = Vector2(0, 0);
     
@@ -37,25 +56,48 @@ void Player::update(float deltaTime) {
 }
 
 void Player::render(SDL_Renderer* renderer) {
-    SDL_SetRenderDrawColor(renderer, 255, 200, 100, 255);
-    
     int centerX = (int)position.x;
     int centerY = (int)position.y;
-    int r = (int)radius;
     
-    for (int x = -r; x <= r; x++) {
-        for (int y = -r; y <= r; y++) {
-            if (x*x + y*y <= r*r) {
-                SDL_RenderDrawPoint(renderer, centerX + x, centerY + y);
+    if (playerTexture) {
+        // Get texture dimensions
+        int textureWidth, textureHeight;
+        SDL_QueryTexture(playerTexture, nullptr, nullptr, &textureWidth, &textureHeight);
+        
+        // Scale the brick sprite appropriately
+        float scale = 0.8f; // Adjust size as needed
+        int scaledWidth = (int)(textureWidth * scale);
+        int scaledHeight = (int)(textureHeight * scale);
+        
+        // Create destination rectangle centered on player position
+        SDL_Rect destRect = {
+            centerX - scaledWidth / 2,
+            centerY - scaledHeight / 2,
+            scaledWidth,
+            scaledHeight
+        };
+        
+        // Render the brick sprite
+        SDL_RenderCopy(renderer, playerTexture, nullptr, &destRect);
+    } else {
+        // Fallback to orange circle if texture fails to load
+        SDL_SetRenderDrawColor(renderer, 255, 200, 100, 255);
+        int r = (int)radius;
+        
+        for (int x = -r; x <= r; x++) {
+            for (int y = -r; y <= r; y++) {
+                if (x*x + y*y <= r*r) {
+                    SDL_RenderDrawPoint(renderer, centerX + x, centerY + y);
+                }
             }
         }
     }
     
-    // Draw gun direction line
-    SDL_SetRenderDrawColor(renderer, 255, 100, 100, 255);
-    SDL_RenderDrawLine(renderer, centerX, centerY, 
-                      centerX + shootDirection.x * 30, 
-                      centerY + shootDirection.y * 30);
+    // Remove the orange direction line - user doesn't want it
+    // SDL_SetRenderDrawColor(renderer, 255, 100, 100, 255);
+    // SDL_RenderDrawLine(renderer, centerX, centerY, 
+    //                   centerX + shootDirection.x * 30, 
+    //                   centerY + shootDirection.y * 30);
     
     // Draw pickup range indicator (faint circle)
     SDL_SetRenderDrawColor(renderer, 100, 255, 100, 30);
@@ -165,14 +207,56 @@ void Player::addWeapon(std::unique_ptr<Weapon> weapon) {
     }
 }
 
-void Player::updateWeapons(float deltaTime, std::vector<std::unique_ptr<Bullet>>& bullets) {
+void Player::addWeapon(std::unique_ptr<Weapon> weapon, SDL_Renderer* renderer) {
+    if (weapons.size() < MAX_WEAPONS) {
+        weapon->initialize(renderer);
+        weapons.push_back(std::move(weapon));
+    }
+}
+
+void Player::initializeWeapons(SDL_Renderer* renderer) {
     for (auto& weapon : weapons) {
-        weapon->update(deltaTime, position, shootDirection, bullets, *this);
+        weapon->initialize(renderer);
+    }
+}
+
+void Player::updateWeapons(float deltaTime, std::vector<std::unique_ptr<Bullet>>& bullets) {
+    if (weapons.empty()) return;
+    
+    // Calculate circular positioning for multiple weapons (same as renderWeapons)
+    int numWeapons = weapons.size();
+    float radius = 50.0f; // Same radius as in renderWeapons
+    
+    for (int i = 0; i < numWeapons; i++) {
+        // Calculate weapon position in circle around player (same logic as renderWeapons)
+        float angleOffset = (2.0f * M_PI * i) / numWeapons;
+        float positionAngle = angleOffset;
+        Vector2 offsetDirection(cos(positionAngle), sin(positionAngle));
+        Vector2 weaponPos = position + offsetDirection * radius;
+        
+        // Update weapon with its actual position
+        weapons[i]->update(deltaTime, weaponPos, shootDirection, bullets, *this);
     }
 }
 
 void Player::renderWeapons(SDL_Renderer* renderer) {
-    for (auto& weapon : weapons) {
-        weapon->render(renderer, position);
+    if (weapons.empty()) return;
+    
+    // Calculate circular positioning for multiple weapons
+    int numWeapons = weapons.size();
+    float radius = 50.0f; // Increased distance from player center
+    
+    for (int i = 0; i < numWeapons; i++) {
+        // Calculate weapon position in circle around player (position only)
+        float angleOffset = (2.0f * M_PI * i) / numWeapons;
+        float positionAngle = angleOffset; // Just spread positions around circle
+        Vector2 offsetDirection(cos(positionAngle), sin(positionAngle));
+        Vector2 weaponPos = position + offsetDirection * radius;
+        
+        // All weapons point toward mouse (same direction)
+        Vector2 weaponDirection = shootDirection;
+        
+        // Render weapon at calculated position but pointing at mouse
+        weapons[i]->render(renderer, weaponPos, weaponDirection);
     }
 }

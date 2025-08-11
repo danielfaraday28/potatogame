@@ -4,10 +4,12 @@
 #include <cmath>
 #include <algorithm>
 #include <random>
+#include <SDL2/SDL_image.h>
+#include <iostream>
 
 Weapon::Weapon(WeaponType weaponType, WeaponTier weaponTier) 
     : type(weaponType), tier(weaponTier), timeSinceLastShot(0.0f), 
-      muzzleFlashTimer(0.0f), lastShotDirection(1, 0) {
+      muzzleFlashTimer(0.0f), lastShotDirection(1, 0), weaponTexture(nullptr) {
     
     // Initialize stats based on weapon type and tier
     switch (type) {
@@ -17,6 +19,58 @@ Weapon::Weapon(WeaponType weaponType, WeaponTier weaponTier)
         case WeaponType::SMG:
             initializeSMGStats();
             break;
+    }
+}
+
+Weapon::~Weapon() {
+    if (weaponTexture) {
+        SDL_DestroyTexture(weaponTexture);
+        weaponTexture = nullptr;
+    }
+}
+
+void Weapon::initialize(SDL_Renderer* renderer) {
+    loadWeaponTexture(renderer);
+}
+
+void Weapon::loadWeaponTexture(SDL_Renderer* renderer) {
+    std::string texturePath;
+    
+    switch (type) {
+        case WeaponType::PISTOL:
+            // Use different pistol sprites based on tier
+            switch (tier) {
+                case WeaponTier::TIER_1:
+                    texturePath = "assets/weapons/pistol.png";
+                    break;
+                case WeaponTier::TIER_2:
+                    texturePath = "assets/weapons/pistol2.png";
+                    break;
+                case WeaponTier::TIER_3:
+                case WeaponTier::TIER_4:
+                    texturePath = "assets/weapons/pistol3.png";
+                    break;
+            }
+            break;
+        case WeaponType::SMG:
+            texturePath = "assets/weapons/smg.png";
+            break;
+        default:
+            texturePath = "assets/weapons/pistol.png";
+            break;
+    }
+    
+    SDL_Surface* surface = IMG_Load(texturePath.c_str());
+    if (!surface) {
+        std::cout << "Failed to load weapon texture: " << texturePath << " - " << IMG_GetError() << std::endl;
+        return;
+    }
+    
+    weaponTexture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+    
+    if (!weaponTexture) {
+        std::cout << "Failed to create weapon texture: " << SDL_GetError() << std::endl;
     }
 }
 
@@ -79,7 +133,7 @@ void Weapon::initializeSMGStats() {
     stats.rangedDamageScaling = 1.0f;
 }
 
-void Weapon::update(float deltaTime, const Vector2& playerPos, 
+void Weapon::update(float deltaTime, const Vector2& weaponPos, 
                    const Vector2& aimDirection,
                    std::vector<std::unique_ptr<Bullet>>& bullets,
                    const Player& player) {
@@ -89,26 +143,55 @@ void Weapon::update(float deltaTime, const Vector2& playerPos,
     
     // Fire in the direction player is aiming if ready
     if (canFire()) {
-        fire(playerPos, aimDirection, bullets, player);
+        fire(weaponPos, aimDirection, bullets, player);
         timeSinceLastShot = 0.0f;
         muzzleFlashTimer = 0.1f; // Show muzzle flash for 0.1 seconds
         lastShotDirection = aimDirection;
     }
 }
 
-void Weapon::render(SDL_Renderer* renderer, const Vector2& playerPos) {
-    // Draw weapon indicator (simple line pointing in last shot direction)
-    if (muzzleFlashTimer > 0) {
-        // Muzzle flash effect
+void Weapon::render(SDL_Renderer* renderer, const Vector2& weaponPos, const Vector2& weaponDirection) {
+    if (!weaponTexture) {
+        // Fallback to line rendering if no texture
+        SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
+        Vector2 weaponEnd = weaponPos + weaponDirection * 15;
+        SDL_RenderDrawLine(renderer, 
+                          (int)weaponPos.x, (int)weaponPos.y,
+                          (int)weaponEnd.x, (int)weaponEnd.y);
+        return;
+    }
+    
+    // Get texture dimensions
+    int textureWidth, textureHeight;
+    SDL_QueryTexture(weaponTexture, nullptr, nullptr, &textureWidth, &textureHeight);
+    
+    // Scale down the weapon sprite to much smaller size
+    float scale = 0.33f;
+    int scaledWidth = (int)(textureWidth * scale);
+    int scaledHeight = (int)(textureHeight * scale);
+    
+    // Calculate rotation angle in degrees using weapon direction
+    double angle = atan2(weaponDirection.y, weaponDirection.x) * 180.0 / M_PI;
+    
+    // Create destination rectangle
+    SDL_Rect destRect = {
+        (int)(weaponPos.x - scaledWidth / 2),
+        (int)(weaponPos.y - scaledHeight / 2),
+        scaledWidth,
+        scaledHeight
+    };
+    
+    // Render rotated weapon sprite
+    SDL_RenderCopyEx(renderer, weaponTexture, nullptr, &destRect, angle, nullptr, SDL_FLIP_NONE);
+    
+    // Only show muzzle flash if this weapon just fired (timer > 0.05 means very recent)
+    if (muzzleFlashTimer > 0.05f) {
         SDL_SetRenderDrawColor(renderer, 255, 255, 100, 255);
         
-        Vector2 muzzlePos = playerPos + lastShotDirection * 25;
-        SDL_RenderDrawLine(renderer, 
-                          (int)playerPos.x, (int)playerPos.y,
-                          (int)muzzlePos.x, (int)muzzlePos.y);
+        Vector2 muzzlePos = weaponPos + weaponDirection * 15;
         
-        // Flash circle
-        int flashRadius = 8;
+        // Flash circle - smaller and less intrusive
+        int flashRadius = 4;
         for (int x = -flashRadius; x <= flashRadius; x++) {
             for (int y = -flashRadius; y <= flashRadius; y++) {
                 if (x*x + y*y <= flashRadius*flashRadius) {
@@ -116,17 +199,10 @@ void Weapon::render(SDL_Renderer* renderer, const Vector2& playerPos) {
                 }
             }
         }
-    } else {
-        // Normal weapon indicator
-        SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
-        Vector2 weaponEnd = playerPos + lastShotDirection * 15;
-        SDL_RenderDrawLine(renderer, 
-                          (int)playerPos.x, (int)playerPos.y,
-                          (int)weaponEnd.x, (int)weaponEnd.y);
     }
 }
 
-void Weapon::fire(const Vector2& playerPos, const Vector2& direction, 
+void Weapon::fire(const Vector2& weaponPos, const Vector2& direction, 
                  std::vector<std::unique_ptr<Bullet>>& bullets,
                  const Player& player) {
     
@@ -154,9 +230,9 @@ void Weapon::fire(const Vector2& playerPos, const Vector2& direction,
         finalDamage = (int)(finalDamage * stats.critMultiplier);
     }
     
-    // Create bullet with appropriate type
+    // Create bullet with appropriate type from weapon position
     BulletType bulletType = (type == WeaponType::SMG) ? BulletType::SMG : BulletType::PISTOL;
-    bullets.push_back(std::make_unique<Bullet>(playerPos, fireDirection, finalDamage, stats.range, 400.0f, bulletType));
+    bullets.push_back(std::make_unique<Bullet>(weaponPos, fireDirection, finalDamage, stats.range, 400.0f, bulletType));
     
     // Special weapon effects
     if (type == WeaponType::PISTOL) {

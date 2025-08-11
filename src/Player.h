@@ -21,12 +21,15 @@ struct PlayerStats {
     
     PlayerStats() : maxHealth(100), moveSpeed(200), pickupRange(50), 
                    attackSpeed(1.0f), damage(10), range(200), 
-                   armor(0), healthRegen(0), dodgeChance(0), luck(0), materials(0) {}
+                   armor(0), healthRegen(0), dodgeChance(0), luck(0), materials(50) {}
 };
 
 class Player {
 public:
     Player(float x, float y);
+    
+    // Initialize player with renderer for texture loading
+    void initialize(SDL_Renderer* renderer);
     
     void update(float deltaTime);
     void render(SDL_Renderer* renderer);
@@ -37,8 +40,10 @@ public:
     
     // Weapon management
     void addWeapon(std::unique_ptr<Weapon> weapon);
+    void addWeapon(std::unique_ptr<Weapon> weapon, SDL_Renderer* renderer);
     void updateWeapons(float deltaTime, std::vector<std::unique_ptr<Bullet>>& bullets);
     void renderWeapons(SDL_Renderer* renderer);
+    void initializeWeapons(SDL_Renderer* renderer);
     
     Vector2 getPosition() const { return position; }
     float getRadius() const { return radius; }
@@ -56,6 +61,10 @@ public:
     int getLevel() const { return level; }
     int getExperienceToNextLevel() const;
     void gainMaterials(int amount) { stats.materials += amount; }
+    
+    // Weapon getters
+    int getWeaponCount() const { return weapons.size(); }
+    const std::vector<std::unique_ptr<Weapon>>& getWeapons() const { return weapons; }
     
 private:
     Vector2 position;
@@ -75,4 +84,7 @@ private:
     // Weapon inventory (max 6 weapons like Brotato)
     std::vector<std::unique_ptr<Weapon>> weapons;
     static const int MAX_WEAPONS = 6;
+    
+    // Player sprite
+    SDL_Texture* playerTexture;
 };

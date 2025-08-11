@@ -1,6 +1,8 @@
 #pragma once
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
+#include <vector>
+#include <memory>
 #include "Vector2.h"
 
 enum class EnemyState {
@@ -8,13 +10,15 @@ enum class EnemyState {
     HIT
 };
 
+class Bullet;
+
 class Enemy {
 public:
     Enemy(Vector2 pos, SDL_Renderer* renderer);
-    ~Enemy();
+    virtual ~Enemy();
     
-    void update(float deltaTime, Vector2 playerPos);
-    void render(SDL_Renderer* renderer);
+    virtual void update(float deltaTime, Vector2 playerPos, std::vector<std::unique_ptr<Bullet>>& bullets);
+    virtual void render(SDL_Renderer* renderer);
     
     Vector2 getPosition() const { return position; }
     float getRadius() const { return radius; }
@@ -31,6 +35,7 @@ private:
     void loadSprites(SDL_Renderer* renderer);
     SDL_Texture* loadTexture(const char* path, SDL_Renderer* renderer);
     
+protected:
     Vector2 position;
     Vector2 velocity;
     float radius;

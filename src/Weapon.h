@@ -42,14 +42,17 @@ struct WeaponStats {
 class Weapon {
 public:
     Weapon(WeaponType type, WeaponTier tier = WeaponTier::TIER_1);
-    virtual ~Weapon() = default;
+    virtual ~Weapon();
     
-    virtual void update(float deltaTime, const Vector2& playerPos, 
+    // Initialize weapon with renderer for texture loading
+    void initialize(SDL_Renderer* renderer);
+    
+    virtual void update(float deltaTime, const Vector2& weaponPos, 
                        const Vector2& aimDirection,
                        std::vector<std::unique_ptr<Bullet>>& bullets,
                        const Player& player);
     
-    virtual void render(SDL_Renderer* renderer, const Vector2& playerPos);
+    virtual void render(SDL_Renderer* renderer, const Vector2& weaponPos, const Vector2& weaponDirection);
     
     // Getters
     WeaponType getType() const { return type; }
@@ -61,7 +64,7 @@ public:
     int calculateDamage(const Player& player) const;
     
 protected:
-    virtual void fire(const Vector2& playerPos, const Vector2& direction, 
+    virtual void fire(const Vector2& weaponPos, const Vector2& direction, 
                      std::vector<std::unique_ptr<Bullet>>& bullets,
                      const Player& player);
     
@@ -77,4 +80,8 @@ protected:
     // Visual/audio feedback
     float muzzleFlashTimer;
     Vector2 lastShotDirection;
+    
+    // Sprite rendering
+    SDL_Texture* weaponTexture;
+    void loadWeaponTexture(SDL_Renderer* renderer);
 };
