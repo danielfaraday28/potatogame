@@ -37,7 +37,7 @@ std::string ShopItem::getWeaponDescription(WeaponType wType, WeaponTier wTier) {
     return "";
 }
 
-Shop::Shop() : active(false), rerollCount(0), currentWave(0), selectedItem(0), hoveredItem(-1), lastMousePressed(false), selectedOwnedWeapon(-1) {
+Shop::Shop() : active(false), rerollCount(0), currentWave(0), selectedItem(0), hoveredItem(-1), lastMousePressed(false), selectedOwnedWeapon(-1), hoveredOwnedWeapon(-1) {
     for (int i = 0; i < 4; i++) {
         keyPressed[i] = false;
     }
@@ -192,7 +192,7 @@ void Shop::render(SDL_Renderer* renderer, int windowWidth, int windowHeight) {
     // Bottom-right: Owned weapons grid (player weapon array)
     int weaponsPanelX = shopX + shopWidth - 320; // inside shop
     int weaponsPanelY = itemsPanelY;
-    renderTTFText(renderer, "Weapons", weaponsPanelX, weaponsPanelY - 28, white, 18);
+    renderTTFText(renderer, "Weapons (click to sell for 50%)", weaponsPanelX, weaponsPanelY - 28, white, 18);
     int wSlotSize = 56;
     int wSlotSpacing = 14;
     if (gameRef) {
@@ -217,12 +217,23 @@ void Shop::render(SDL_Renderer* renderer, int windowWidth, int windowHeight) {
                         SDL_Rect ir = {cx + 8, cy + 8, wSlotSize - 16, wSlotSize - 16};
                         SDL_RenderCopy(renderer, icon, nullptr, &ir);
                     }
-                    // Highlight if selected
-                    if (selectedOwnedWeapon == i) {
+                    // Highlight if selected/hovered
+                    if (selectedOwnedWeapon == i || hoveredOwnedWeapon == i) {
                         SDL_SetRenderDrawColor(renderer, 200, 220, 255, 255);
                         SDL_RenderDrawRect(renderer, &slot);
                     }
                 }
+            }
+
+            // Show sell price tooltip when hovering an owned weapon
+            if (hoveredOwnedWeapon >= 0 && hoveredOwnedWeapon < (int)owned.size()) {
+                WeaponType t = owned[hoveredOwnedWeapon]->getType();
+                WeaponTier tr = owned[hoveredOwnedWeapon]->getTier();
+                int price = calculateItemPrice(t, tr, currentWave);
+                int sellValue = std::max(1, price / 2);
+                SDL_Color yellow = {255, 220, 120, 255};
+                std::string tip = "Sell for: " + std::to_string(sellValue);
+                renderTTFText(renderer, tip.c_str(), weaponsPanelX, weaponsPanelY + wSlotSize + 14, yellow, 14);
             }
         }
     }
@@ -494,6 +505,21 @@ void Shop::buyItem(int index, Player& player) {
     }
 }
 
+void Shop::sellOwnedWeapon(int ownedIndex, Player& player) {
+    if (!gameRef) return;
+    const auto& owned = player.getWeapons();
+    if (ownedIndex < 0 || ownedIndex >= static_cast<int>(owned.size())) return;
+
+    WeaponType type = owned[ownedIndex]->getType();
+    WeaponTier tier = owned[ownedIndex]->getTier();
+    int price = calculateItemPrice(type, tier, currentWave);
+    int sellValue = std::max(1, price / 2);
+
+    player.getStats().materials += sellValue;
+    player.removeWeaponAt(ownedIndex);
+    std::cout << "Sold weapon for " << sellValue << " materials" << std::endl;
+}
+
 void Shop::lockItem(int index) {
     if (index >= items.size()) return;
     
@@ -656,15 +682,18 @@ void Shop::handleMouseInput(int mouseX, int mouseY, bool mousePressed, Player& p
     int weaponsPanelX2 = shopX + shopWidth - 320;
     int wSlotSize = 56; int wSlotSpacing = 14;
     selectedOwnedWeapon = -1;
+    hoveredOwnedWeapon = -1;
     const auto& owned = player.getWeapons();
     for (int i = 0; i < 6; i++) {
         int cx = weaponsPanelX2 + i * (wSlotSize + wSlotSpacing);
         int cy = itemsPanelY2;
         SDL_Rect slot = {cx, cy, wSlotSize, wSlotSize};
         if (mouseX >= slot.x && mouseX <= slot.x + slot.w && mouseY >= slot.y && mouseY <= slot.y + slot.h) {
+            hoveredOwnedWeapon = i;
             if (mousePressed && !lastMousePressed) {
                 if (i < (int)owned.size()) {
-                    selectedOwnedWeapon = i; // select owned weapon slot
+                    // Click to sell at 50%
+                    sellOwnedWeapon(i, player);
                 }
             }
         }

@@ -44,6 +44,7 @@ public:
     void updateWeapons(float deltaTime, std::vector<std::unique_ptr<Bullet>>& bullets);
     void renderWeapons(SDL_Renderer* renderer);
     void initializeWeapons(SDL_Renderer* renderer);
+    void removeWeaponAt(int index);
     
     Vector2 getPosition() const { return position; }
     float getRadius() const { return radius; }

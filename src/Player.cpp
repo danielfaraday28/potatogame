@@ -265,3 +265,8 @@ void Player::renderWeapons(SDL_Renderer* renderer) {
         weapons[i]->render(renderer, weaponPos, weaponDirection);
     }
 }
+
+void Player::removeWeaponAt(int index) {
+    if (index < 0 || index >= static_cast<int>(weapons.size())) return;
+    weapons.erase(weapons.begin() + index);
+}
