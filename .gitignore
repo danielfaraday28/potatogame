@@ -1,4 +1,6 @@
 # Ignore Claude/Cursor local settings
 .claude/
+build/
+.vscode/
 \# Ignore accidental Windows device-name file
 nul
