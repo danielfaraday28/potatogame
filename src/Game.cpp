@@ -204,6 +204,7 @@ void Game::update(float deltaTime) {
     
     spawnEnemies();
     checkCollisions();
+    checkMeleeAttacks();
     updateExperienceCollection();
     updateMaterialCollection();
     
@@ -723,6 +724,57 @@ void Game::checkCollisions() {
             if (distance < player->getRadius() + enemy->getRadius()) {
                 player->takeDamage(enemy->getDamage());
                 enemy->destroy();
+            }
+        }
+    }
+}
+
+void Game::checkMeleeAttacks() {
+    // Check if player has any melee weapons that are currently attacking
+    for (int i = 0; i < player->getWeaponCount(); i++) {
+        const Weapon* weapon = player->getWeapon(i);
+        if (weapon && weapon->isMeleeWeapon() && weapon->isAttacking()) {
+            // Only damage during the peak of the attack (when weapon is most extended)
+            float attackProgress = weapon->getAttackProgress();
+            if (attackProgress < 0.4f || attackProgress > 0.8f) {
+                continue; // Only damage during middle 40% of animation
+            }
+            
+            // Calculate weapon tip position
+            Vector2 weaponTip = weapon->getWeaponTipPosition(player->getPosition(), player->getShootDirection());
+            float damageRadius = 25.0f; // Smaller damage radius at weapon tip
+            int meleeDamage = weapon->calculateDamage(*player);
+            
+            // Check for critical hit
+            static std::random_device rd;
+            static std::mt19937 gen(rd());
+            std::uniform_real_distribution<float> critRoll(0.0f, 1.0f);
+            
+            if (critRoll(gen) < weapon->getStats().critChance) {
+                meleeDamage = (int)(meleeDamage * weapon->getStats().critMultiplier);
+            }
+            
+            // Damage all enemies within damage radius of weapon tip (Brotato-style infinite pierce)
+            for (auto& enemy : enemies) {
+                if (enemy->isAlive()) {
+                    float distance = weaponTip.distance(enemy->getPosition());
+                    if (distance <= damageRadius + enemy->getRadius()) {
+                        enemy->hit();
+                        enemy->destroy();
+                        
+                        // Create experience orb at enemy position
+                        experienceOrbs.push_back(std::make_unique<ExperienceOrb>(enemy->getPosition()));
+                        
+                        // Chance to drop materials
+                        static std::random_device matRd;
+                        static std::mt19937 matGen(matRd());
+                        std::uniform_real_distribution<float> matChance(0.0f, 1.0f);
+                        
+                        if (matChance(matGen) < getMaterialDropChance()) {
+                            materials.push_back(std::make_unique<Material>(enemy->getPosition()));
+                        }
+                    }
+                }
             }
         }
     }

@@ -10,7 +10,8 @@ class Player;
 
 enum class WeaponType {
     PISTOL,
-    SMG
+    SMG,
+    MELEE_STICK
 };
 
 enum class WeaponTier {
@@ -63,6 +64,12 @@ public:
     // Calculate final damage with player stats
     int calculateDamage(const Player& player) const;
     
+    // Melee weapon support
+    bool isMeleeWeapon() const { return type == WeaponType::MELEE_STICK; }
+    bool isAttacking() const { return muzzleFlashTimer > 0.0f; } // Reuse muzzle flash timer for melee attack duration
+    float getAttackProgress() const { return muzzleFlashTimer > 0.0f ? (0.3f - muzzleFlashTimer) / 0.3f : 0.0f; } // 0.0 = start, 1.0 = fully extended
+    Vector2 getWeaponTipPosition(const Vector2& weaponPos, const Vector2& direction) const;
+    
 protected:
     virtual void fire(const Vector2& weaponPos, const Vector2& direction, 
                      std::vector<std::unique_ptr<Bullet>>& bullets,
@@ -71,6 +78,7 @@ protected:
     // Initialize weapon stats based on type
     void initializePistolStats();
     void initializeSMGStats();
+    void initializeMeleeStickStats();
     
     WeaponType type;
     WeaponTier tier;

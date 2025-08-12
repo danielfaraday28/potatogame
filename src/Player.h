@@ -65,6 +65,12 @@ public:
     // Weapon getters
     int getWeaponCount() const { return weapons.size(); }
     const std::vector<std::unique_ptr<Weapon>>& getWeapons() const { return weapons; }
+    const Weapon* getWeapon(int index) const { 
+        if (index >= 0 && index < static_cast<int>(weapons.size())) {
+            return weapons[index].get();
+        }
+        return nullptr;
+    }
     
 private:
     Vector2 position;

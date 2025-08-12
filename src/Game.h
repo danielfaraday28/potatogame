@@ -57,6 +57,7 @@ private:
     void updateSpawnIndicators(float deltaTime);
     void renderSpawnIndicators();
     void checkCollisions();
+    void checkMeleeAttacks();
     void updateExperienceCollection();
     void updateMaterialCollection();
     float getMaterialDropChance() const;

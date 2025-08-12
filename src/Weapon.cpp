@@ -19,6 +19,9 @@ Weapon::Weapon(WeaponType weaponType, WeaponTier weaponTier)
         case WeaponType::SMG:
             initializeSMGStats();
             break;
+        case WeaponType::MELEE_STICK:
+            initializeMeleeStickStats();
+            break;
     }
 }
 
@@ -54,6 +57,9 @@ void Weapon::loadWeaponTexture(SDL_Renderer* renderer) {
             break;
         case WeaponType::SMG:
             texturePath = "assets/weapons/smg.png";
+            break;
+        case WeaponType::MELEE_STICK:
+            texturePath = "assets/weapons/brickonstick.png";
             break;
         default:
             texturePath = "assets/weapons/pistol.png";
@@ -133,6 +139,36 @@ void Weapon::initializeSMGStats() {
     stats.rangedDamageScaling = 1.0f;
 }
 
+void Weapon::initializeMeleeStickStats() {
+    // Brick on Stick stats based on tier - Brotato style melee weapon
+    switch (tier) {
+        case WeaponTier::TIER_1:
+            stats.baseDamage = 15; // Higher base damage than ranged weapons
+            stats.attackSpeed = 0.8f; // Slower than SMG but faster than pistol
+            break;
+        case WeaponTier::TIER_2:
+            stats.baseDamage = 25;
+            stats.attackSpeed = 0.75f;
+            break;
+        case WeaponTier::TIER_3:
+            stats.baseDamage = 40;
+            stats.attackSpeed = 0.7f;
+            break;
+        case WeaponTier::TIER_4:
+            stats.baseDamage = 65;
+            stats.attackSpeed = 0.65f;
+            break;
+    }
+    
+    // Melee weapon characteristics
+    stats.range = 80; // Short melee range
+    stats.critChance = 0.08f; // Decent crit chance
+    stats.critMultiplier = 2.5f; // High crit multiplier
+    stats.knockback = 25; // Strong knockback
+    stats.rangedDamageScaling = 0.0f; // No ranged scaling
+    stats.meleeDamageScaling = 1.0f; // Scales with melee damage
+}
+
 void Weapon::update(float deltaTime, const Vector2& weaponPos, 
                    const Vector2& aimDirection,
                    std::vector<std::unique_ptr<Bullet>>& bullets,
@@ -151,6 +187,44 @@ void Weapon::update(float deltaTime, const Vector2& weaponPos,
 }
 
 void Weapon::render(SDL_Renderer* renderer, const Vector2& weaponPos, const Vector2& weaponDirection) {
+    // Special rendering for melee weapons
+    if (type == WeaponType::MELEE_STICK) {
+        // Show weapon extending and retracting
+        if (muzzleFlashTimer > 0.0f) {
+            Vector2 weaponTip = getWeaponTipPosition(weaponPos, weaponDirection);
+            
+            // Draw the weapon as a thick line from player to current tip position
+            SDL_SetRenderDrawColor(renderer, 139, 69, 19, 255); // Brown color for stick
+            
+            // Draw multiple lines to make it thicker
+            for (int offset = -2; offset <= 2; offset++) {
+                Vector2 perpendicular(-weaponDirection.y, weaponDirection.x);
+                Vector2 startPos = weaponPos + perpendicular * offset;
+                Vector2 endPos = weaponTip + perpendicular * offset;
+                
+                SDL_RenderDrawLine(renderer, 
+                                  (int)startPos.x, (int)startPos.y,
+                                  (int)endPos.x, (int)endPos.y);
+            }
+            
+            // Draw the brick at the tip
+            SDL_SetRenderDrawColor(renderer, 160, 82, 45, 255); // Darker brown for brick
+            int brickSize = 6;
+            SDL_Rect brickRect = {
+                (int)weaponTip.x - brickSize/2,
+                (int)weaponTip.y - brickSize/2,
+                brickSize,
+                brickSize
+            };
+            SDL_RenderFillRect(renderer, &brickRect);
+        }
+        
+        // Don't render the normal weapon texture for melee weapons during attack
+        if (muzzleFlashTimer > 0.0f) {
+            return;
+        }
+    }
+    
     if (!weaponTexture) {
         // Fallback to line rendering if no texture
         SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
@@ -206,6 +280,14 @@ void Weapon::fire(const Vector2& weaponPos, const Vector2& direction,
                  std::vector<std::unique_ptr<Bullet>>& bullets,
                  const Player& player) {
     
+    // Melee weapons don't create bullets - they will be handled by Game's melee collision detection
+    if (type == WeaponType::MELEE_STICK) {
+        // Set attack timer for melee weapons (reuse muzzle flash timer)
+        // This indicates the weapon is actively attacking
+        muzzleFlashTimer = 0.3f; // Melee attack duration
+        return;
+    }
+    
     Vector2 fireDirection = direction;
     
     // Add inaccuracy for SMG
@@ -253,4 +335,26 @@ int Weapon::calculateDamage(const Player& player) const {
     }
     
     return (int)totalDamage;
+}
+
+Vector2 Weapon::getWeaponTipPosition(const Vector2& weaponPos, const Vector2& direction) const {
+    if (!isMeleeWeapon()) {
+        return weaponPos;
+    }
+    
+    float progress = getAttackProgress();
+    // Create a smooth extension/retraction animation
+    // Use a sine wave for smooth motion: extend quickly, pause, retract
+    float animationPhase;
+    if (progress < 0.6f) {
+        // Extension phase (0.0 to 0.6 = 60% of animation)
+        animationPhase = (progress / 0.6f) * (3.14159f / 2.0f); // 0 to π/2
+        float extension = sin(animationPhase); // 0 to 1
+        return weaponPos + direction * (stats.range * extension);
+    } else {
+        // Retraction phase (0.6 to 1.0 = 40% of animation)
+        animationPhase = ((progress - 0.6f) / 0.4f) * (3.14159f / 2.0f); // 0 to π/2
+        float retraction = cos(animationPhase); // 1 to 0
+        return weaponPos + direction * (stats.range * retraction);
+    }
 }

@@ -10,7 +10,9 @@ Player::Player(float x, float y)
     // Initialize health to match max health
     health = stats.maxHealth;
     
-    // Start with a basic pistol
+    // Start with a brick on stick melee weapon for testing
+    addWeapon(std::make_unique<Weapon>(WeaponType::MELEE_STICK, WeaponTier::TIER_1));
+    // Also add a pistol for comparison
     addWeapon(std::make_unique<Weapon>(WeaponType::PISTOL, WeaponTier::TIER_1));
 }
 
@@ -154,7 +156,10 @@ void Player::levelUp() {
     stats.maxHealth += 1;
     
     // Add weapons at certain levels for testing
-    if (level == 3 && weapons.size() < MAX_WEAPONS) {
+    if (level == 2 && weapons.size() < MAX_WEAPONS) {
+        addWeapon(std::make_unique<Weapon>(WeaponType::MELEE_STICK, WeaponTier::TIER_1));
+        std::cout << "Got Brick on Stick!" << std::endl;
+    } else if (level == 3 && weapons.size() < MAX_WEAPONS) {
         addWeapon(std::make_unique<Weapon>(WeaponType::SMG, WeaponTier::TIER_1));
         std::cout << "Got SMG!" << std::endl;
     } else if (level == 5 && weapons.size() < MAX_WEAPONS) {
