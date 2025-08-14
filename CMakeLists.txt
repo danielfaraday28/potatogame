@@ -21,6 +21,8 @@ set(SOURCES
     src/Material.cpp
     src/Weapon.cpp
     src/Shop.cpp
+    src/Item.cpp
+    src/Bomb.cpp
 )
 
 set(HEADERS
@@ -35,6 +37,8 @@ set(HEADERS
     src/Material.h
     src/Weapon.h
     src/Shop.h
+    src/Item.h
+    src/Bomb.h
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})

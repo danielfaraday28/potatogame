@@ -2,6 +2,7 @@
 #include <cmath>
 #include <iostream>
 #include <SDL2/SDL_image.h>
+#include "Game.h"
 
 Player::Player(float x, float y) 
     : position(x, y), velocity(0, 0), shootDirection(1, 0), 
@@ -269,4 +270,46 @@ void Player::renderWeapons(SDL_Renderer* renderer) {
 void Player::removeWeaponAt(int index) {
     if (index < 0 || index >= static_cast<int>(weapons.size())) return;
     weapons.erase(weapons.begin() + index);
+}
+
+// Item Management Implementation
+void Player::addItem(std::unique_ptr<Item> item) {
+    if (items.size() < MAX_ITEMS) {
+        items.push_back(std::move(item));
+    }
+}
+
+bool Player::useItem(int slot, Game& game) {
+    if (slot < 0 || slot >= static_cast<int>(items.size())) return false;
+    
+    // Use the item and check if it was consumed
+    if (items[slot]->use(*this, game)) {
+        // Remove consumed item
+        items.erase(items.begin() + slot);
+        return true;
+    }
+    return false;
+}
+
+bool Player::hasItemType(ItemType type) const {
+    for (const auto& item : items) {
+        if (item->getType() == type) return true;
+    }
+    return false;
+}
+
+const Item* Player::getItem(int index) const {
+    if (index >= 0 && index < static_cast<int>(items.size())) {
+        return items[index].get();
+    }
+    return nullptr;
+}
+
+void Player::removeItem(int index) {
+    if (index < 0 || index >= static_cast<int>(items.size())) return;
+    items.erase(items.begin() + index);
+}
+
+void Player::heal(int amount) {
+    health = std::min(health + amount, stats.maxHealth);
 }

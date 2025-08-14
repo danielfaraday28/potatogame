@@ -10,6 +10,7 @@
 #include "Material.h"
 #include "Weapon.h"
 #include "Shop.h"
+#include "Bomb.h"
 
 // Forward declarations
 class SlimeEnemy;
@@ -49,6 +50,9 @@ public:
     const Player* getPlayer() const { return player.get(); }
     SDL_Renderer* getRenderer() const { return renderer; }
     
+    // Bomb management (public for item usage)
+    void addBomb(Vector2 position, float timer, float radius, int damage);
+    
 private:
     void handleEvents();
     void update(float deltaTime);
@@ -59,6 +63,14 @@ private:
     void checkCollisions();
     void checkMeleeAttacks();
     void updateExperienceCollection();
+    
+    // Bomb management (private internal methods)
+    void updateBombs(float deltaTime);
+    void renderBombs();
+    void checkBombExplosions();
+    
+    // Item input handling
+    void handleItemInput(const Uint8* keyState);
     void updateMaterialCollection();
     float getMaterialDropChance() const;
     void renderUI();
@@ -73,8 +85,13 @@ private:
     std::vector<SpawnIndicator> spawnIndicators;
     std::vector<std::unique_ptr<ExperienceOrb>> experienceOrbs;
     std::vector<std::unique_ptr<Material>> materials;
+    std::vector<std::unique_ptr<Bomb>> bombs;
     
     float timeSinceLastSpawn;
+    
+    // Item input state
+    bool fKeyPressed;
+    bool rKeyPressed;
     int score;
     int wave;
     Vector2 mousePos;

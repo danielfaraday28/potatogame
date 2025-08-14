@@ -4,6 +4,7 @@
 #include <memory>
 #include "Vector2.h"
 #include "Weapon.h"
+#include "Item.h"
 
 struct PlayerStats {
     // Brotato-like stats
@@ -73,6 +74,15 @@ public:
         return nullptr;
     }
     
+    // Item management
+    void addItem(std::unique_ptr<Item> item);
+    bool useItem(int slot, Game& game);
+    bool hasItemType(ItemType type) const;
+    int getItemCount() const { return items.size(); }
+    const Item* getItem(int index) const;
+    void removeItem(int index);
+    void heal(int amount);
+    
 private:
     Vector2 position;
     Vector2 velocity;
@@ -91,6 +101,10 @@ private:
     // Weapon inventory (max 6 weapons like Brotato)
     std::vector<std::unique_ptr<Weapon>> weapons;
     static const int MAX_WEAPONS = 6;
+    
+    // Item inventory (max 6 items like weapons)
+    std::vector<std::unique_ptr<Item>> items;
+    static const int MAX_ITEMS = 6;
     
     // Player sprite
     SDL_Texture* playerTexture;

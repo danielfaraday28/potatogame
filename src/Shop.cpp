@@ -7,6 +7,7 @@
 #include <cmath>
 #include <string>
 #include <cstring>
+#include <sstream>
 #include <SDL2/SDL_image.h>
 
 std::string ShopItem::getWeaponName(WeaponType wType, WeaponTier wTier) {
@@ -14,6 +15,7 @@ std::string ShopItem::getWeaponName(WeaponType wType, WeaponTier wTier) {
     switch (wType) {
         case WeaponType::PISTOL: baseName = "Pistol"; break;
         case WeaponType::SMG: baseName = "SMG"; break;
+        case WeaponType::MELEE_STICK: baseName = "Brick on Stick"; break;
     }
     
     std::string tierName;
@@ -33,8 +35,33 @@ std::string ShopItem::getWeaponDescription(WeaponType wType, WeaponTier wTier) {
             return "Pierces 1 enemy, -50% damage to 2nd";
         case WeaponType::SMG:
             return "Fast fire rate, inaccurate shots";
+        case WeaponType::MELEE_STICK:
+            return "Melee weapon with short range";
     }
     return "";
+}
+
+std::string ShopItem::getItemName(ItemType iType) {
+    switch (iType) {
+        case ItemType::HEALING_BOX:
+            return "HEALING BOX";
+        case ItemType::MASS_BOMB:
+            return "MASS BOMB";
+    }
+    return "";
+}
+
+std::string ShopItem::getItemDescription(ItemType iType, int power) {
+    std::stringstream ss;
+    switch (iType) {
+        case ItemType::HEALING_BOX:
+            ss << "Restores " << power << " health";
+            break;
+        case ItemType::MASS_BOMB:
+            ss << "Deals " << power << " damage\nRadius: " << (power * 5);
+            break;
+    }
+    return ss.str();
 }
 
 Shop::Shop() : active(false), rerollCount(0), currentWave(0), selectedItem(0), hoveredItem(-1), lastMousePressed(false), selectedOwnedWeapon(-1), hoveredOwnedWeapon(-1) {
@@ -58,6 +85,8 @@ void Shop::loadAssets(SDL_Renderer* renderer) {
     texReroll = loadTexture("assets/ui/reroll.png", renderer);
     texWeaponPistol = loadTexture("assets/weapons/pistol.png", renderer);
     texWeaponSMG = loadTexture("assets/weapons/smg.png", renderer);
+    texHealingBox = loadTexture("assets/items/healing_box.png", renderer);
+    texMassBomb = loadTexture("assets/items/mass_bomb.png", renderer);
 }
 
 void Shop::unloadAssets() {
@@ -73,6 +102,8 @@ void Shop::unloadAssets() {
     destroyIf(texReroll);
     destroyIf(texWeaponPistol);
     destroyIf(texWeaponSMG);
+    destroyIf(texHealingBox);
+    destroyIf(texMassBomb);
 }
 
 void Shop::generateItems(int waveNumber, int playerLuck) {
@@ -83,23 +114,38 @@ void Shop::generateItems(int waveNumber, int playerLuck) {
     
     // Generate 4 random items
     for (int i = 0; i < MAX_SHOP_ITEMS; i++) {
-        // Choose weapon type
-        std::uniform_int_distribution<int> weaponDist(0, 1);
-        WeaponType weaponType = (weaponDist(gen) == 0) ? WeaponType::PISTOL : WeaponType::SMG;
-        
-        // Choose tier based on wave number (Brotato tier restrictions)
-        std::vector<WeaponTier> availableTiers;
-        availableTiers.push_back(WeaponTier::TIER_1);
-        
-        if (waveNumber >= 2) availableTiers.push_back(WeaponTier::TIER_2);
-        if (waveNumber >= 4) availableTiers.push_back(WeaponTier::TIER_3);
-        if (waveNumber >= 8) availableTiers.push_back(WeaponTier::TIER_4);
-        
-        std::uniform_int_distribution<int> tierDist(0, availableTiers.size() - 1);
-        WeaponTier tier = availableTiers[tierDist(gen)];
-        
-        int price = calculateItemPrice(weaponType, tier, waveNumber);
-        items.emplace_back(weaponType, tier, price);
+        // 70% chance for weapon, 30% for item
+        std::uniform_real_distribution<float> typeDist(0.0f, 1.0f);
+        if (typeDist(gen) < 0.7f) {
+            // Generate weapon
+            std::uniform_int_distribution<int> weaponDist(0, 1);
+            WeaponType weaponType = (weaponDist(gen) == 0) ? WeaponType::PISTOL : WeaponType::SMG;
+            
+            // Choose tier based on wave number (Brotato tier restrictions)
+            std::vector<WeaponTier> availableTiers;
+            availableTiers.push_back(WeaponTier::TIER_1);
+            
+            if (waveNumber >= 2) availableTiers.push_back(WeaponTier::TIER_2);
+            if (waveNumber >= 4) availableTiers.push_back(WeaponTier::TIER_3);
+            if (waveNumber >= 8) availableTiers.push_back(WeaponTier::TIER_4);
+            
+            std::uniform_int_distribution<int> tierDist(0, availableTiers.size() - 1);
+            WeaponTier tier = availableTiers[tierDist(gen)];
+            
+            int price = calculateItemPrice(weaponType, tier, waveNumber);
+            items.emplace_back(weaponType, tier, price);
+        } else {
+            // Generate item
+            std::uniform_int_distribution<int> itemDist(0, 1);
+            ItemType itemType = (itemDist(gen) == 0) ? ItemType::HEALING_BOX : ItemType::MASS_BOMB;
+            
+            // Scale item power with wave
+            int basePower = 20;
+            int power = basePower + (waveNumber * 5);
+            
+            int price = calculateItemPrice(itemType, power, waveNumber);
+            items.emplace_back(itemType, power, price);
+        }
     }
 }
 
@@ -212,6 +258,7 @@ void Shop::render(SDL_Renderer* renderer, int windowWidth, int windowHeight) {
                     switch (owned[i]->getType()) {
                         case WeaponType::PISTOL: icon = texWeaponPistol; break;
                         case WeaponType::SMG: icon = texWeaponSMG; break;
+                        case WeaponType::MELEE_STICK: icon = nullptr; break; // No texture yet
                     }
                     if (icon) {
                         SDL_Rect ir = {cx + 8, cy + 8, wSlotSize - 16, wSlotSize - 16};
@@ -295,11 +342,19 @@ void Shop::renderShopItem(SDL_Renderer* renderer, const ShopItem& item, int x, i
     }
     SDL_RenderDrawRect(renderer, &itemRect);
     
-    // Weapon icon - larger and centered
+    // Item icon - larger and centered
     SDL_Texture* icon = nullptr;
-    switch (item.weaponType) {
-        case WeaponType::PISTOL: icon = texWeaponPistol; break;
-        case WeaponType::SMG: icon = texWeaponSMG; break;
+    if (item.type == ShopItemType::WEAPON) {
+        switch (item.weaponType) {
+            case WeaponType::PISTOL: icon = texWeaponPistol; break;
+            case WeaponType::SMG: icon = texWeaponSMG; break;
+            case WeaponType::MELEE_STICK: icon = nullptr; break; // No texture yet
+        }
+    } else if (item.type == ShopItemType::ITEM) {
+        switch (item.itemType) {
+            case ItemType::HEALING_BOX: icon = texHealingBox; break;
+            case ItemType::MASS_BOMB: icon = texMassBomb; break;
+        }
     }
     if (icon) {
         SDL_Rect ir = {x + width/2 - 24, y + 10, 48, 48};
@@ -418,6 +473,7 @@ void Shop::renderCharacterStats(SDL_Renderer* renderer, int x, int y, int width,
         switch (weapons[i]->getType()) {
             case WeaponType::PISTOL: weaponText += "Pistol"; break;
             case WeaponType::SMG: weaponText += "SMG"; break;
+            case WeaponType::MELEE_STICK: weaponText += "Brick on Stick"; break;
         }
         
         // Add tier info
@@ -486,15 +542,33 @@ void Shop::buyItem(int index, Player& player) {
     
     // Check if player has enough materials
     if (player.getStats().materials >= item.price) {
-        // Check if player can hold more weapons
+        bool purchased = false;
+        
         if (item.type == ShopItemType::WEAPON) {
             // Create and add weapon to player with renderer for sprite loading
             auto weapon = std::make_unique<Weapon>(item.weaponType, item.tier);
             player.addWeapon(std::move(weapon), gameRef->getRenderer());
-            
+            purchased = true;
+        } else if (item.type == ShopItemType::ITEM) {
+            // Create and add item to player
+            std::unique_ptr<Item> newItem;
+            switch (item.itemType) {
+                case ItemType::HEALING_BOX:
+                    newItem = std::make_unique<HealingBox>(item.itemPower, item.price);
+                    break;
+                case ItemType::MASS_BOMB:
+                    newItem = std::make_unique<MassBomb>(item.itemPower, 3.0f, item.itemPower * 5.0f, item.price);
+                    break;
+            }
+            if (newItem) {
+                player.addItem(std::move(newItem));
+                purchased = true;
+            }
+        }
+        
+        if (purchased) {
             // Deduct materials
             player.getStats().materials -= item.price;
-            
             std::cout << "Bought " << item.name << " for " << item.price << " materials" << std::endl;
             
             // Remove item from shop
@@ -564,6 +638,23 @@ int Shop::calculateItemPrice(WeaponType weaponType, WeaponTier tier, int waveNum
     
     // Wave scaling (increases with wave)
     basePrice += waveNumber * 5;
+    
+    return basePrice;
+}
+
+void Shop::addItemToShop(ItemType type, int power, int waveNumber) {
+    int price = calculateItemPrice(type, power, waveNumber);
+    items.emplace_back(type, power, price);
+}
+
+int Shop::calculateItemPrice(ItemType type, int power, int waveNumber) {
+    int basePrice = 15; // Base item price (slightly cheaper than weapons)
+    
+    // Power scaling
+    basePrice += power / 2;
+    
+    // Wave scaling
+    basePrice += waveNumber * 3;
     
     return basePrice;
 }

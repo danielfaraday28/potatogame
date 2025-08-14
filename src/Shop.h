@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include "Weapon.h"
+#include "Item.h"
 
 class Player;
 class Game;
@@ -17,6 +18,8 @@ struct ShopItem {
     ShopItemType type;
     WeaponType weaponType;
     WeaponTier tier;
+    ItemType itemType;
+    int itemPower;
     int price;
     bool locked;
     std::string name;
@@ -24,16 +27,27 @@ struct ShopItem {
     
     ShopItem(WeaponType wType, WeaponTier wTier, int cost) 
         : type(ShopItemType::WEAPON), weaponType(wType), tier(wTier), 
-          price(cost), locked(false) {
+          price(cost), locked(false), itemType(ItemType::HEALING_BOX), itemPower(0) {
         
         // Generate name and description
         name = getWeaponName(wType, wTier);
         description = getWeaponDescription(wType, wTier);
     }
     
+    ShopItem(ItemType iType, int power, int cost)
+        : type(ShopItemType::ITEM), weaponType(WeaponType::PISTOL), tier(WeaponTier::TIER_1),
+          price(cost), locked(false), itemType(iType), itemPower(power) {
+        
+        // Generate name and description
+        name = getItemName(iType);
+        description = getItemDescription(iType, power);
+    }
+    
 private:
     std::string getWeaponName(WeaponType wType, WeaponTier wTier);
     std::string getWeaponDescription(WeaponType wType, WeaponTier wTier);
+    std::string getItemName(ItemType iType);
+    std::string getItemDescription(ItemType iType, int power);
 };
 
 class Shop {
@@ -47,6 +61,8 @@ public:
     
     void generateItems(int waveNumber, int playerLuck = 0);
     void render(SDL_Renderer* renderer, int windowWidth, int windowHeight);
+    void addItemToShop(ItemType type, int power, int waveNumber);
+    int calculateItemPrice(ItemType type, int power, int waveNumber);
     void handleInput(const Uint8* keyState, Player& player);
     void handleMouseInput(int mouseX, int mouseY, bool mousePressed, Player& player);
     
@@ -101,4 +117,6 @@ private:
     SDL_Texture* texReroll = nullptr;
     SDL_Texture* texWeaponPistol = nullptr;
     SDL_Texture* texWeaponSMG = nullptr;
+    SDL_Texture* texHealingBox = nullptr;
+    SDL_Texture* texMassBomb = nullptr;
 };

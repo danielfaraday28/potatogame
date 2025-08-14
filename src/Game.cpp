@@ -15,7 +15,7 @@
 Game::Game() : window(nullptr), renderer(nullptr), running(false), 
                timeSinceLastSpawn(0), score(0), wave(1), mousePos(0, 0),
                waveTimer(0), waveDuration(20.0f), waveActive(true), materialBag(0),
-               defaultFont(nullptr) {
+               defaultFont(nullptr), fKeyPressed(false), rKeyPressed(false) {
 }
 
 Game::~Game() {
@@ -135,6 +135,7 @@ void Game::handleEvents() {
         shop->handleMouseInput(mouseX, mouseY, mousePressed, *player);
     } else {
         player->handleInput(keyState);
+        handleItemInput(keyState);
         
         // Update player's shoot direction to point towards mouse
         player->updateShootDirection(mousePos);
@@ -183,6 +184,10 @@ void Game::update(float deltaTime) {
     
     // Update weapons (they will fire in aim direction)
     player->updateWeapons(deltaTime, bullets);
+    
+    // Update bombs
+    updateBombs(deltaTime);
+    checkBombExplosions();
     
     for (auto& bullet : bullets) {
         bullet->update(deltaTime);
@@ -331,6 +336,9 @@ void Game::render() {
         material->render(renderer);
     }
     
+    // Render bombs
+    renderBombs();
+    
     renderUI();
     
     // Render shop on top if active
@@ -396,6 +404,41 @@ void Game::renderUI() {
     int materialDigits = std::to_string(player->getStats().materials).length();
     int materialX = 70 - (materialDigits * 6); // Center the number
     renderNumber(player->getStats().materials, materialX, 142, 2);
+    
+    // Item slots with keybind hints
+    int itemSlotSize = 40;
+    int itemSpacing = 10;
+    int itemStartX = 20;
+    int itemStartY = 200;
+    
+    // Draw item slots
+    for (int i = 0; i < player->getItemCount(); i++) {
+        SDL_Rect slotRect = {itemStartX + i * (itemSlotSize + itemSpacing), itemStartY, itemSlotSize, itemSlotSize};
+        
+        // Slot background
+        SDL_SetRenderDrawColor(renderer, 40, 45, 50, 255);
+        SDL_RenderFillRect(renderer, &slotRect);
+        
+        // Border
+        SDL_SetRenderDrawColor(renderer, 100, 110, 120, 255);
+        SDL_RenderDrawRect(renderer, &slotRect);
+        
+        // Draw item icon (placeholder for now)
+        const Item* item = player->getItem(i);
+        if (item) {
+            SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
+            SDL_Rect iconRect = {slotRect.x + 8, slotRect.y + 8, slotRect.w - 16, slotRect.h - 16};
+            SDL_RenderFillRect(renderer, &iconRect);
+            
+            // Draw keybind hint
+            SDL_Color white = {255, 255, 255, 255};
+            if (item->getType() == ItemType::HEALING_BOX) {
+                renderTTFText("F", slotRect.x + 4, slotRect.y + slotRect.h + 4, white, 12);
+            } else if (item->getType() == ItemType::MASS_BOMB) {
+                renderTTFText("R", slotRect.x + 4, slotRect.y + slotRect.h + 4, white, 12);
+            }
+        }
+    }
     
     // Center top: Wave number with TTF text
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 200); // Semi-transparent black
@@ -773,6 +816,87 @@ void Game::checkMeleeAttacks() {
                         if (matChance(matGen) < getMaterialDropChance()) {
                             materials.push_back(std::make_unique<Material>(enemy->getPosition()));
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+void Game::handleItemInput(const Uint8* keyState) {
+    // F key for healing box
+    if (keyState[SDL_SCANCODE_F]) {
+        if (!fKeyPressed) {
+            // Find first healing box
+            for (int i = 0; i < player->getItemCount(); i++) {
+                if (const Item* item = player->getItem(i)) {
+                    if (item->getType() == ItemType::HEALING_BOX) {
+                        player->useItem(i, *this);
+                        break;
+                    }
+                }
+            }
+        }
+        fKeyPressed = true;
+    } else {
+        fKeyPressed = false;
+    }
+    
+    // R key for bomb
+    if (keyState[SDL_SCANCODE_R]) {
+        if (!rKeyPressed) {
+            // Find first bomb
+            for (int i = 0; i < player->getItemCount(); i++) {
+                if (const Item* item = player->getItem(i)) {
+                    if (item->getType() == ItemType::MASS_BOMB) {
+                        player->useItem(i, *this);
+                        break;
+                    }
+                }
+            }
+        }
+        rKeyPressed = true;
+    } else {
+        rKeyPressed = false;
+    }
+}
+
+void Game::addBomb(Vector2 position, float timer, float radius, int damage) {
+    bombs.push_back(std::make_unique<Bomb>(position, timer, radius, damage));
+}
+
+void Game::updateBombs(float deltaTime) {
+    for (auto& bomb : bombs) {
+        bomb->update(deltaTime);
+    }
+    
+    // Remove dead bombs
+    bombs.erase(std::remove_if(bombs.begin(), bombs.end(),
+        [](const std::unique_ptr<Bomb>& bomb) {
+            return !bomb->isAlive();
+        }), bombs.end());
+}
+
+void Game::renderBombs() {
+    for (auto& bomb : bombs) {
+        bomb->render(renderer);
+    }
+}
+
+void Game::checkBombExplosions() {
+    for (auto& bomb : bombs) {
+        if (bomb->isExploded()) {
+            Vector2 bombPos = bomb->getPosition();
+            float bombRadius = bomb->getRadius();
+            int bombDamage = bomb->getDamage();
+            
+            // Damage enemies in radius
+            for (auto& enemy : enemies) {
+                if (enemy->isAlive()) {
+                    float distance = bombPos.distance(enemy->getPosition());
+                    if (distance <= bombRadius + enemy->getRadius()) {
+                        enemy->hit();
+                        enemy->destroy();
                     }
                 }
             }
