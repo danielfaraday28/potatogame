@@ -1,3 +1,6 @@
+---
+alwaysApply: true
+---
 ## Brotato MVP – LLM Development Context (Always On)
 
 This project is a C++17 + SDL2 top-down survival shooter with a wave system and a between-wave shop. Use this guide to implement new features safely and consistently.
@@ -116,5 +119,3 @@ This project is a C++17 + SDL2 top-down survival shooter with a wave system and 
 - UI text readable with and without TTF font.
 - No gameplay updates occur when the shop is active.
 - No linter or obvious runtime errors introduced.
-
-
