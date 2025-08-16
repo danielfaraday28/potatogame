@@ -11,6 +11,7 @@
 #include "Weapon.h"
 #include "Shop.h"
 #include "Bomb.h"
+#include "Menu.h"
 
 // Forward declarations
 class SlimeEnemy;
@@ -52,6 +53,13 @@ public:
     
     // Bomb management (public for item usage)
     void addBomb(Vector2 position, float timer, float radius, int damage);
+    
+    // Menu management
+    void showPauseMenu();
+    void showGameOverMenu();
+    void restartGame();
+    void exitGame();
+    bool isGamePaused() const;
     
 private:
     void handleEvents();
@@ -107,6 +115,11 @@ private:
     
     // Shop system
     std::unique_ptr<Shop> shop;
+    bool shopJustClosed; // Flag to prevent ESC from leaking from shop to game
+    
+    // Menu system
+    std::unique_ptr<Menu> menu;
+    bool gameOverShown; // Flag to prevent repeated game over menu calls
     
     // TTF Font system
     TTF_Font* defaultFont;

@@ -15,7 +15,7 @@
 Game::Game() : window(nullptr), renderer(nullptr), running(false), 
                timeSinceLastSpawn(0), score(0), wave(1), mousePos(0, 0),
                waveTimer(0), waveDuration(20.0f), waveActive(true), materialBag(0),
-               defaultFont(nullptr), fKeyPressed(false), rKeyPressed(false) {
+               defaultFont(nullptr), fKeyPressed(false), rKeyPressed(false), shopJustClosed(false), gameOverShown(false) {
 }
 
 Game::~Game() {
@@ -66,6 +66,9 @@ bool Game::init() {
     shop = std::make_unique<Shop>();
     shop->setGame(this);
     shop->loadAssets(renderer);
+    
+    menu = std::make_unique<Menu>();
+    menu->setGame(this);
     
     // Try to load fonts in order of preference
     const char* fontPaths[] = {
@@ -125,15 +128,54 @@ void Game::handleEvents() {
     
     const Uint8* keyState = SDL_GetKeyboardState(nullptr);
     
+    // Ensure menu and shop are not both active
+    if (menu->isMenuActive() && shop->isShopActive()) {
+        shop->closeShop();
+    }
+    
+    // Handle menu input if menu is active
+    if (menu->isMenuActive()) {
+        menu->handleInput(keyState);
+        
+        // Handle mouse input for menu
+        Uint32 mouseState = SDL_GetMouseState(&mouseX, &mouseY);
+        bool mousePressed = (mouseState & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
+        menu->handleMouseInput(mouseX, mouseY, mousePressed);
+    }
     // Handle shop input if shop is active
-    if (shop->isShopActive()) {
+    else if (shop->isShopActive()) {
+        bool shopWasActive = shop->isShopActive();
         shop->handleInput(keyState, *player);
+        
+        // Check if shop was closed by ESC key
+        if (shopWasActive && !shop->isShopActive() && keyState[SDL_SCANCODE_ESCAPE]) {
+            shopJustClosed = true;
+        }
         
         // Handle mouse input for shop
         Uint32 mouseState = SDL_GetMouseState(&mouseX, &mouseY);
         bool mousePressed = (mouseState & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
         shop->handleMouseInput(mouseX, mouseY, mousePressed, *player);
-    } else {
+    } 
+    // Handle game input (including ESC for pause)
+    else {
+        // ESC key handling for pause menu (only when not in shop)
+        static bool escKeyPressed = false;
+        
+        // Don't process ESC if shop just closed this frame
+        if (shopJustClosed) {
+            shopJustClosed = false; // Reset flag
+            escKeyPressed = keyState[SDL_SCANCODE_ESCAPE]; // Set ESC state to current key state
+        }
+        else if (keyState[SDL_SCANCODE_ESCAPE] && !escKeyPressed) {
+            escKeyPressed = true;
+            showPauseMenu();
+            // Tell pause menu that ESC key is currently pressed to avoid immediate close
+            menu->setEscKeyPressed(true);
+        } else if (!keyState[SDL_SCANCODE_ESCAPE]) {
+            escKeyPressed = false;
+        }
+        
         player->handleInput(keyState);
         handleItemInput(keyState);
         
@@ -143,8 +185,21 @@ void Game::handleEvents() {
 }
 
 void Game::update(float deltaTime) {
+    // Check for game over condition
     if (player->getHealth() <= 0) {
-        running = false;
+        if (!gameOverShown) {
+            // Ensure shop is closed if player dies
+            if (shop->isShopActive()) {
+                shop->closeShop();
+            }
+            showGameOverMenu();
+            gameOverShown = true; // Set flag to prevent repeated calls
+        }
+        return; // Don't update game logic when game is over
+    }
+    
+    // Don't update game if menu is active (pause functionality)
+    if (menu->isMenuActive()) {
         return;
     }
     
@@ -343,6 +398,9 @@ void Game::render() {
     
     // Render shop on top if active
     shop->render(renderer, WINDOW_WIDTH, WINDOW_HEIGHT);
+    
+    // Render menu on top of everything if active
+    menu->render(renderer, WINDOW_WIDTH, WINDOW_HEIGHT);
     
     SDL_RenderPresent(renderer);
 }
@@ -923,4 +981,54 @@ void Game::cleanup() {
     TTF_Quit();
     IMG_Quit();
     SDL_Quit();
+}
+
+// Menu management methods
+void Game::showPauseMenu() {
+    menu->showMenu(MenuType::PAUSE);
+}
+
+void Game::showGameOverMenu() {
+    // Ensure shop is closed when showing game over menu
+    if (shop->isShopActive()) {
+        shop->closeShop();
+    }
+    menu->showMenu(MenuType::GAME_OVER);
+}
+
+void Game::restartGame() {
+    // Full game reset
+    wave = 1;
+    waveTimer = 0;
+    waveDuration = 20.0f;
+    waveActive = true;
+    materialBag = 0;
+    score = 0;
+    timeSinceLastSpawn = 0;
+    gameOverShown = false; // Reset game over flag
+    
+    // Clear all game entities
+    enemies.clear();
+    bullets.clear();
+    experienceOrbs.clear();
+    materials.clear();
+    bombs.clear();
+    spawnIndicators.clear();
+    
+    // Reset player to starting state
+    player = std::make_unique<Player>(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2);
+    player->initialize(renderer);
+    player->initializeWeapons(renderer);
+    
+    // Close shop and menu
+    shop->closeShop();
+    menu->hideMenu();
+}
+
+void Game::exitGame() {
+    running = false;
+}
+
+bool Game::isGamePaused() const {
+    return menu->isMenuActive();
 }

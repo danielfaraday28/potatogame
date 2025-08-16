@@ -23,6 +23,7 @@ set(SOURCES
     src/Shop.cpp
     src/Item.cpp
     src/Bomb.cpp
+    src/Menu.cpp
 )
 
 set(HEADERS
@@ -39,6 +40,7 @@ set(HEADERS
     src/Shop.h
     src/Item.h
     src/Bomb.h
+    src/Menu.h
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
