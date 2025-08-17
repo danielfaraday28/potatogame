@@ -16,6 +16,7 @@
 // Forward declarations
 class SlimeEnemy;
 class PebblinEnemy;
+class BossEnemy;
 
 enum class EnemySpawnType {
     BASE,
@@ -53,6 +54,12 @@ public:
     
     // Bomb management (public for item usage)
     void addBomb(Vector2 position, float timer, float radius, int damage);
+    void addBullet(const Vector2& pos, const Vector2& vel, int dmg, bool isEnemy = false) {
+        bullets.push_back(std::make_unique<Bullet>(pos, vel, dmg, isEnemy));
+    }
+    void addSpawnIndicator(const Vector2& pos, float duration, EnemySpawnType type) {
+        spawnIndicators.emplace_back(pos, duration, type);
+    }
     
     // Menu management
     void showPauseMenu();
@@ -129,4 +136,12 @@ private:
     
     static const int WINDOW_WIDTH = 1920;
     static const int WINDOW_HEIGHT = 1080;
+    static const int BOSS_WAVE_INTERVAL = 3;
+
+    // Boss wave system
+    bool isBossWave = false;
+    std::unique_ptr<BossEnemy> boss;
+    void startBossWave(int waveIndex);
+    void endBossWave(bool bossDefeated);
+    bool isBossWaveIndex(int wave) const { return wave > 0 && (wave % BOSS_WAVE_INTERVAL) == 0; }
 };

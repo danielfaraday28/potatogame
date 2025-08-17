@@ -22,6 +22,7 @@ set(SOURCES
     src/Weapon.cpp
     src/Shop.cpp
     src/Item.cpp
+    src/BossEnemy.cpp
     src/Bomb.cpp
     src/Menu.cpp
 )
@@ -39,6 +40,7 @@ set(HEADERS
     src/Weapon.h
     src/Shop.h
     src/Item.h
+    src/BossEnemy.h
     src/Bomb.h
     src/Menu.h
 )

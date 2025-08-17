@@ -1,6 +1,7 @@
 #include "Game.h"
 #include "SlimeEnemy.h"
 #include "PebblinEnemy.h"
+#include "BossEnemy.h"
 #include <cmath>
 #include <iostream>
 #include <random>
@@ -211,6 +212,36 @@ void Game::update(float deltaTime) {
     // Update wave timer
     if (waveActive) {
         waveTimer += deltaTime;
+        
+        // Проверяем условие босс-волны в начале волны
+        if (isBossWaveIndex(wave) && !isBossWave && waveTimer < 1.0f) {
+            startBossWave(wave);
+            // Очищаем все индикаторы спавна при старте босс-волны
+            spawnIndicators.clear();
+            timeSinceLastSpawn = 0;
+        }
+        
+        // Обновляем босса если он есть
+        if (isBossWave && boss) {
+            boss->update(deltaTime, player->getPosition(), bullets);
+            
+            // Проверяем смерть босса
+            if (boss->isDead()) {
+                endBossWave(true);
+                
+                // Открываем магазин после победы
+                shop->openShop(wave);
+                wave++;
+                waveTimer = 0;
+                
+                if (waveDuration < 60.0f) {
+                    waveDuration += 5.0f;
+                    if (waveDuration > 60.0f) waveDuration = 60.0f;
+                }
+                return;
+            }
+        }
+        
         if (waveTimer >= waveDuration) {
             // Wave completed - distribute bagged materials
             if (materialBag > 0) {
@@ -372,6 +403,10 @@ void Game::render() {
     player->render(renderer);
     player->renderWeapons(renderer);
     
+    // Рендерим босса если он есть
+    if (isBossWave && boss) {
+        boss->render(renderer);
+    }
     for (auto& bullet : bullets) {
         bullet->render(renderer);
     }
@@ -407,6 +442,32 @@ void Game::render() {
 
 void Game::renderUI() {
     // === BROTATO-STYLE UI LAYOUT WITH BITMAP TEXT ===
+    
+    // Полоса здоровья босса (если есть)
+    if (isBossWave && boss) {
+        // Фон полосы HP босса
+        SDL_SetRenderDrawColor(renderer, 139, 0, 0, 255);
+        SDL_Rect bossHpBg = {WINDOW_WIDTH/4, 50, WINDOW_WIDTH/2, 30};
+        SDL_RenderFillRect(renderer, &bossHpBg);
+        
+        // Заполненная часть HP
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+        int bossHpWidth = static_cast<int>((boss->getHealthPercent() * WINDOW_WIDTH/2));
+        SDL_Rect bossHpBar = {WINDOW_WIDTH/4, 50, bossHpWidth, 30};
+        SDL_RenderFillRect(renderer, &bossHpBar);
+        
+        // Белая рамка
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderDrawRect(renderer, &bossHpBg);
+        
+        // Имя босса
+        if (defaultFont) {
+            SDL_Color white = {255, 255, 255, 255};
+            renderTTFText(boss->getName(), WINDOW_WIDTH/2 - 50, 20, white, 24);
+        } else {
+            renderText(boss->getName(), WINDOW_WIDTH/2 - 50, 20, 2);
+        }
+    }
     
     // Top-left: Health bar with actual numbers
     SDL_SetRenderDrawColor(renderer, 139, 0, 0, 255); // Dark red background
@@ -706,7 +767,182 @@ void Game::renderTTFText(const char* text, int x, int y, SDL_Color color, int fo
     SDL_DestroyTexture(textTexture);
 }
 
+void Game::startBossWave(int waveIndex) {
+    isBossWave = true;
+    
+    // Очищаем всех обычных врагов при старте босс-волны
+    enemies.clear();
+    
+    // Создаем конфиг босса
+    BossConfig config;
+    // Разные имена боссов в зависимости от волны
+    switch (waveIndex) {
+        case 3:
+            config.name = "MEGA SLIME";
+            break;
+        case 6:
+            config.name = "DARK PEBBLIN";
+            break;
+        case 9:
+            config.name = "MORTORHEAD PRIME";
+            break;
+        default:
+            config.name = "ANCIENT ONE";
+            break;
+    }
+    config.seed = static_cast<uint32_t>(waveIndex);
+    
+    // Настраиваем паттерны в зависимости от типа босса
+    if (waveIndex == 3) { // MEGA SLIME - прыгучий босс с круговыми атаками
+        config.weightsP1 = {
+            {BossPattern::DASH_TO_PLAYER, 1.0f},  // Прыжки - основная атака
+            {BossPattern::RADIAL_SHOTS, 0.8f},    // Часто стреляет по кругу
+            {BossPattern::SUMMON_ADDS, 0.3f}      // Редко призывает миньонов
+        };
+        
+        config.weightsP2 = {
+            {BossPattern::DASH_TO_PLAYER, 1.2f},  // Еще больше прыжков
+            {BossPattern::RADIAL_SHOTS, 1.0f},
+            {BossPattern::SPIRAL_SHOTS, 0.8f},    // Новая атака
+            {BossPattern::SUMMON_ADDS, 0.4f}
+        };
+        
+        config.weightsEnrage = {
+            {BossPattern::DASH_TO_PLAYER, 1.5f},  // Агрессивные прыжки
+            {BossPattern::RADIAL_SHOTS, 1.2f},
+            {BossPattern::SPIRAL_SHOTS, 1.0f},
+            {BossPattern::BURST_AIM, 0.8f},       // Новая атака
+            {BossPattern::SUMMON_ADDS, 0.5f}
+        };
+    }
+    else if (waveIndex == 6) { // DARK PEBBLIN - призыватель с прицельной стрельбой
+        config.weightsP1 = {
+            {BossPattern::BURST_AIM, 1.0f},     // Основная атака - прицельная стрельба
+            {BossPattern::SUMMON_ADDS, 0.8f},   // Часто призывает миньонов
+            {BossPattern::RADIAL_SHOTS, 0.4f}   // Редкие защитные залпы
+        };
+        
+        config.weightsP2 = {
+            {BossPattern::BURST_AIM, 1.2f},     // Больше прицельной стрельбы
+            {BossPattern::SUMMON_ADDS, 1.0f},   // Больше миньонов
+            {BossPattern::SPIRAL_SHOTS, 0.7f},  // Добавляем спирали
+            {BossPattern::DASH_TO_PLAYER, 0.3f} // Редкие рывки для позиционирования
+        };
+        
+        config.weightsEnrage = {
+            {BossPattern::BURST_AIM, 1.5f},     // Интенсивная стрельба
+            {BossPattern::SUMMON_ADDS, 1.2f},   // Много миньонов
+            {BossPattern::SPIRAL_SHOTS, 1.0f},  // Частые спирали
+            {BossPattern::RADIAL_SHOTS, 0.8f},  // Защитные залпы
+            {BossPattern::DASH_TO_PLAYER, 0.4f} // Редкие рывки
+        };
+    }
+    else if (waveIndex == 9) { // MORTORHEAD PRIME - мастер спиральной стрельбы
+        config.weightsP1 = {
+            {BossPattern::SPIRAL_SHOTS, 1.0f},   // Основная атака - спирали
+            {BossPattern::RADIAL_SHOTS, 0.7f},   // Дополнительные круговые атаки
+            {BossPattern::DASH_TO_PLAYER, 0.4f}  // Редкие рывки
+        };
+        
+        config.weightsP2 = {
+            {BossPattern::SPIRAL_SHOTS, 1.2f},   // Больше спиралей
+            {BossPattern::BURST_AIM, 0.9f},      // Добавляем прицельную стрельбу
+            {BossPattern::RADIAL_SHOTS, 0.8f},   // Больше круговых атак
+            {BossPattern::DASH_TO_PLAYER, 0.5f}  // Чаще рывки
+        };
+        
+        config.weightsEnrage = {
+            {BossPattern::SPIRAL_SHOTS, 1.5f},   // Интенсивные спирали
+            {BossPattern::BURST_AIM, 1.2f},      // Много прицельной стрельбы
+            {BossPattern::RADIAL_SHOTS, 1.0f},   // Частые круговые атаки
+            {BossPattern::DASH_TO_PLAYER, 0.8f}, // Частые рывки
+            {BossPattern::SUMMON_ADDS, 0.4f}     // Редкий призыв миньонов
+        };
+    }
+    else { // ANCIENT ONE и другие - сбалансированный босс
+        config.weightsP1 = {
+            {BossPattern::RADIAL_SHOTS, 1.0f},
+            {BossPattern::DASH_TO_PLAYER, 0.7f},
+            {BossPattern::BURST_AIM, 0.5f}
+        };
+        
+        config.weightsP2 = {
+            {BossPattern::RADIAL_SHOTS, 1.1f},
+            {BossPattern::SPIRAL_SHOTS, 1.0f},
+            {BossPattern::DASH_TO_PLAYER, 0.8f},
+            {BossPattern::BURST_AIM, 0.7f}
+        };
+        
+        config.weightsEnrage = {
+            {BossPattern::RADIAL_SHOTS, 1.2f},
+            {BossPattern::SPIRAL_SHOTS, 1.2f},
+            {BossPattern::BURST_AIM, 1.0f},
+            {BossPattern::DASH_TO_PLAYER, 0.9f},
+            {BossPattern::SUMMON_ADDS, 0.6f}
+        };
+    }
+    
+    // Создаем босса в центре верхней части экрана
+    Vector2 spawnPos(WINDOW_WIDTH/2.f, WINDOW_HEIGHT/3.f);
+    SDL_Texture* bossTex = nullptr;
+    
+    // Выбираем текстуру босса в зависимости от волны
+    const char* bossTexPath;
+    switch (waveIndex) {
+        case 3:
+            bossTexPath = "assets/enemies/slime.png";
+            break;
+        case 6:
+            bossTexPath = "assets/enemies/pebblin.png";
+            break;
+        case 9:
+        default:
+            bossTexPath = "assets/enemies/mortorhead.png";
+            break;
+    }
+    SDL_Surface* surface = IMG_Load(bossTexPath);
+    if (surface) {
+        bossTex = SDL_CreateTextureFromSurface(renderer, surface);
+        SDL_FreeSurface(surface);
+    }
+    
+    if (bossTex) {
+        boss = std::make_unique<BossEnemy>(spawnPos, renderer, config);
+    } else {
+        std::cout << "Failed to load boss texture!" << std::endl;
+    }
+}
+
+void Game::endBossWave(bool bossDefeated) {
+    isBossWave = false;
+    // Сохраняем позицию до сброса босса
+    Vector2 rewardPos = boss ? boss->getPosition() : Vector2(WINDOW_WIDTH/2.f, WINDOW_HEIGHT/2.f);
+    boss.reset();
+    
+    if (bossDefeated) {
+        // Дроп наград
+        
+        // Опыт (в 10 раз больше чем от обычного врага)
+        for (int i = 0; i < 10; i++) {
+            experienceOrbs.push_back(std::make_unique<ExperienceOrb>(rewardPos));
+        }
+        
+        // Материалы (в 15 раз больше + бонус за волну)
+        int materialCount = 15 + (wave / 3);
+        for (int i = 0; i < materialCount; i++) {
+            materials.push_back(std::make_unique<Material>(
+                rewardPos,
+                2 + (wave / 2),  // Увеличенное значение материалов
+                3 + (wave / 2)   // Увеличенное значение опыта
+            ));
+        }
+    }
+}
+
 void Game::spawnEnemies() {
+    // Не спавним обычных врагов во время босс-волны
+    if (isBossWave || isBossWaveIndex(wave)) return;
+    
     timeSinceLastSpawn += 0.016f;
     
     float spawnRate = 1.0f - (wave * 0.1f);
@@ -807,6 +1043,17 @@ void Game::checkCollisions() {
             }
             continue;
         }
+        
+        // Проверяем попадание по боссу
+        if (isBossWave && boss && boss->isAlive()) {
+            float distance = bullet->getPosition().distance(boss->getPosition());
+            if (distance < bullet->getRadius() + boss->getRadius()) {
+                bullet->destroy();
+                boss->takeDamage(bullet->getDamage());
+            }
+        }
+        
+        // Проверяем попадание по обычным врагам
         for (auto& enemy : enemies) {
             if (bullet->isAlive() && enemy->isAlive()) {
                 float distance = bullet->getPosition().distance(enemy->getPosition());
@@ -819,6 +1066,16 @@ void Game::checkCollisions() {
         }
     }
     
+    // Проверяем коллизию с боссом
+    if (isBossWave && boss && boss->isAlive()) {
+        float bossDistance = player->getPosition().distance(boss->getPosition());
+        if (bossDistance < player->getRadius() + boss->getRadius()) {
+            player->takeDamage(boss->getDamage());
+            // Босса не уничтожаем при столкновении, только наносим урон игроку
+        }
+    }
+
+    // Проверяем коллизии с обычными врагами
     for (auto& enemy : enemies) {
         if (enemy->isAlive()) {
             float distance = player->getPosition().distance(enemy->getPosition());
@@ -1006,6 +1263,10 @@ void Game::restartGame() {
     score = 0;
     timeSinceLastSpawn = 0;
     gameOverShown = false; // Reset game over flag
+    
+    // Сбрасываем состояние босс-волны
+    isBossWave = false;
+    boss.reset();
     
     // Clear all game entities
     enemies.clear();
