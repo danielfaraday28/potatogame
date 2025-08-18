@@ -13,6 +13,7 @@ public:
 
     void update(float deltaTime, Vector2 playerPos, std::vector<std::unique_ptr<Bullet>>& bullets) override;
     void render(SDL_Renderer* renderer) override;
+    EnemyType getEnemyType() const override { return EnemyType::SLIME; }
 
 private:
     void loadSprites(SDL_Renderer* renderer);

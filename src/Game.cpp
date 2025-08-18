@@ -12,6 +12,8 @@
 #include <cstdio> // Add for sprintf
 #include <string>
 #include <map>
+#define _USE_MATH_DEFINES
+#include <cmath>
 
 // State duration constants
 const float Game::WAVE_COMPLETED_DURATION = 2.0f;
@@ -21,7 +23,7 @@ const float Game::WAVE_STARTING_DURATION = 0.8f;  // Reduced from 2.0f
 Game::Game() : window(nullptr), renderer(nullptr), running(false), 
                timeSinceLastSpawn(0), score(0), wave(1), mousePos(0, 0),
                waveTimer(0), waveDuration(20.0f), waveActive(true), materialBag(0),
-               defaultFont(nullptr), fKeyPressed(false), rKeyPressed(false), shopJustClosed(false), gameOverShown(false),
+               defaultFont(nullptr), starTexture(nullptr), fKeyPressed(false), rKeyPressed(false), shopJustClosed(false), gameOverShown(false),
                currentState(GameState::WAVE_ACTIVE), stateTimer(0.0f), stateDuration(0.0f) {
 }
 
@@ -97,6 +99,16 @@ bool Game::init() {
     if (!defaultFont) {
         std::cout << "No TTF font available - using bitmap fallback" << std::endl;
         // Continue without TTF font - will fall back to bitmap rendering
+    }
+    
+    // Load particle star texture
+    starTexture = IMG_LoadTexture(renderer, "assets/particles/star.png");
+    if (!starTexture) {
+        std::cout << "Failed to load star texture: " << IMG_GetError() << std::endl;
+        std::cout << "Particle effects will be disabled" << std::endl;
+        // Continue without particles (graceful degradation)
+    } else {
+        std::cout << "Loaded particle star texture" << std::endl;
     }
     
     running = true;
@@ -192,9 +204,15 @@ void Game::handleEvents() {
 }
 
 void Game::update(float deltaTime) {
+    // Always update particles regardless of game state (even when dead or paused)
+    updateParticles(deltaTime);
+    
     // Check for game over condition
     if (player->getHealth() <= 0) {
         if (!gameOverShown) {
+            // Add player death particle effect - red particles, medium amount, medium duration/speed
+            createParticleBurst(player->getPosition(), 15, 120.0f, 1.0f, {255, 0, 0, 255}, 0.7f); // 30% smaller
+            
             // Ensure shop is closed if player dies
             if (shop->isShopActive()) {
                 shop->closeShop();
@@ -318,6 +336,10 @@ void Game::update(float deltaTime) {
     enemies.erase(std::remove_if(enemies.begin(), enemies.end(),
         [&](const std::unique_ptr<Enemy>& enemy) {
             if (!enemy->isAlive()) {
+                // Add enemy death particle effect - enemy-specific color, small amount, low duration/speed
+                SDL_Color enemyColor = getEnemyParticleColor(enemy->getEnemyType());
+                createParticleBurst(enemy->getPosition(), 8, 80.0f, 0.6f, enemyColor, 0.49f); // 0.7f * 0.7f = ~30% smaller
+                
                 // Brotato-style material drop system
                 float dropChance = getMaterialDropChance();
                 static std::random_device rd;
@@ -439,6 +461,9 @@ void Game::render() {
     
     // Render bombs
     renderBombs();
+    
+    // Render particles (after background entities, before UI)
+    renderParticles();
     
     renderUI();
     
@@ -1232,6 +1257,9 @@ void Game::checkBombExplosions() {
                 if (enemy->isAlive()) {
                     float distance = bombPos.distance(enemy->getPosition());
                     if (distance <= bombRadius + enemy->getRadius()) {
+                        // Add enemy death particle effect - enemy-specific color, small amount, low duration/speed
+                        SDL_Color enemyColor = getEnemyParticleColor(enemy->getEnemyType());
+                        createParticleBurst(enemy->getPosition(), 8, 80.0f, 0.6f, enemyColor, 0.49f); // 0.7f * 0.7f = ~30% smaller
                         enemy->hit();
                         enemy->destroy();
                     }
@@ -1242,6 +1270,11 @@ void Game::checkBombExplosions() {
 }
 
 void Game::cleanup() {
+    if (starTexture) {
+        SDL_DestroyTexture(starTexture);
+        starTexture = nullptr;
+    }
+    
     if (defaultFont) {
         TTF_CloseFont(defaultFont);
         defaultFont = nullptr;
@@ -1301,6 +1334,7 @@ void Game::restartGame() {
     experienceOrbs.clear();
     materials.clear();
     bombs.clear();
+    particles.clear();
     spawnIndicators.clear();
     
     // Reset player to starting state
@@ -1328,6 +1362,13 @@ void Game::enterState(GameState newState) {
     switch (newState) {
         case GameState::WAVE_COMPLETED:
             stateDuration = WAVE_COMPLETED_DURATION;
+            // Add enemy-specific colored particle effects for enemies disappearing at wave end
+            for (auto& enemy : enemies) {
+                if (enemy->isAlive()) {
+                    SDL_Color enemyColor = getEnemyParticleColor(enemy->getEnemyType());
+                    createParticleBurst(enemy->getPosition(), 15, 120.0f, 1.0f, enemyColor, 0.63f); // 0.9f * 0.7f = ~30% smaller
+                }
+            }
             // Clear all enemies from the map
             enemies.clear();
             // Keep bullets on screen - don't clear them
@@ -1461,4 +1502,72 @@ void Game::renderStateUI() {
             // No overlay message for these states
             break;
     }
+}
+
+// Particle system implementation
+SDL_Color Game::getEnemyParticleColor(EnemyType enemyType) {
+    switch (enemyType) {
+        case EnemyType::BASE:
+            return {100, 150, 255, 255}; // Blue
+        case EnemyType::PEBBLIN:
+            return {139, 119, 101, 255}; // Stone color (brownish gray)
+        case EnemyType::SLIME:
+            return {60, 179, 113, 255};  // Swamp green
+        default:
+            return {255, 0, 0, 255};     // Default red fallback
+    }
+}
+
+void Game::updateParticles(float deltaTime) {
+    for (auto& particle : particles) {
+        particle->update(deltaTime);
+    }
+}
+
+void Game::renderParticles() {
+    if (!starTexture) return;
+    
+    for (auto& particle : particles) {
+        if (particle->isAlive()) {
+            particle->render(renderer, starTexture);
+        }
+    }
+}
+
+void Game::createParticleBurst(Vector2 position, int particleCount, float particleSpeed,
+                              float normalDuration, SDL_Color color, float scale) {
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> angleDist(0.0f, 2.0f * M_PI);
+    std::uniform_real_distribution<float> speedVariation(0.8f, 1.2f);
+    
+    for (int i = 0; i < particleCount; ++i) {
+        // Random direction (360 degrees)
+        float angle = angleDist(gen);
+        float speed = particleSpeed * speedVariation(gen);
+        
+        Vector2 velocity(
+            std::cos(angle) * speed,
+            std::sin(angle) * speed
+        );
+        
+        particles.push_back(std::make_unique<Particle>(
+            position, velocity, normalDuration, color, scale
+        ));
+    }
+}
+
+void Game::createExplosionEffect(Vector2 position, SDL_Color color) {
+    // Large burst with high-speed particles
+    createParticleBurst(position, 50, 200.0f, 1.5f, color, 1.0f);
+}
+
+void Game::createDeathEffect(Vector2 position, SDL_Color color) {
+    // Medium burst with medium-speed particles
+    createParticleBurst(position, 20, 150.0f, 1.0f, color, 0.8f);
+}
+
+void Game::createImpactEffect(Vector2 position, SDL_Color color) {
+    // Small burst with low-speed particles
+    createParticleBurst(position, 15, 100.0f, 0.5f, color, 0.6f);
 }

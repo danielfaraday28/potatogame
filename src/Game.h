@@ -12,6 +12,7 @@
 #include "Shop.h"
 #include "Bomb.h"
 #include "Menu.h"
+#include "Particle.h"
 
 // Forward declarations
 class SlimeEnemy;
@@ -69,6 +70,13 @@ public:
         spawnIndicators.emplace_back(pos, duration, type);
     }
     
+    // Particle system (public for effect creation)
+    void createParticleBurst(Vector2 position, int particleCount, float particleSpeed,
+                            float normalDuration, SDL_Color color, float scale = 1.0f);
+    void createExplosionEffect(Vector2 position, SDL_Color color = {255, 255, 255, 255});
+    void createDeathEffect(Vector2 position, SDL_Color color = {255, 0, 0, 255});
+    void createImpactEffect(Vector2 position, SDL_Color color = {255, 255, 0, 255});
+    
     // Menu management
     void showPauseMenu();
     void showGameOverMenu();
@@ -92,6 +100,11 @@ private:
     void renderBombs();
     void checkBombExplosions();
     
+    // Particle system (private internal methods)
+    void updateParticles(float deltaTime);
+    void renderParticles();
+    SDL_Color getEnemyParticleColor(EnemyType enemyType);
+    
     // Item input handling
     void handleItemInput(const Uint8* keyState);
     void updateMaterialCollection();
@@ -114,6 +127,7 @@ private:
     std::vector<std::unique_ptr<ExperienceOrb>> experienceOrbs;
     std::vector<std::unique_ptr<Material>> materials;
     std::vector<std::unique_ptr<Bomb>> bombs;
+    std::vector<std::unique_ptr<Particle>> particles;
     
     float timeSinceLastSpawn;
     
@@ -143,6 +157,9 @@ private:
     
     // TTF Font system
     TTF_Font* defaultFont;
+    
+    // Particle system
+    SDL_Texture* starTexture;
     
     // Telegraph duration for spawn indicators (seconds)
     float spawnTelegraphSeconds = 2.0f;
