@@ -313,3 +313,9 @@ void Player::removeItem(int index) {
 void Player::heal(int amount) {
     health = std::min(health + amount, stats.maxHealth);
 }
+
+void Player::reloadAllWeapons() {
+    for (auto& weapon : weapons) {
+        weapon->resetFiring();
+    }
+}

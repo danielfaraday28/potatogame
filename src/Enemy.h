@@ -10,6 +10,12 @@ enum class EnemyState {
     HIT
 };
 
+enum class EnemyType {
+    BASE,
+    SLIME,
+    PEBBLIN
+};
+
 class Bullet;
 
 class Enemy {
@@ -30,6 +36,7 @@ public:
     }
     
     int getDamage() const { return damage; }
+    virtual EnemyType getEnemyType() const { return EnemyType::BASE; }
     
 private:
     void loadSprites(SDL_Renderer* renderer);

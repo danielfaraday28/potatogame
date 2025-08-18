@@ -12,6 +12,7 @@
 #include "Shop.h"
 #include "Bomb.h"
 #include "Menu.h"
+#include "Particle.h"
 
 // Forward declarations
 class SlimeEnemy;
@@ -22,6 +23,14 @@ enum class EnemySpawnType {
     BASE,
     SLIME,
     PEBBLIN
+};
+
+enum class GameState {
+    WAVE_ACTIVE,        // Normal wave gameplay
+    WAVE_COMPLETED,     // Wave just ended, showing completion message
+    SHOP_ACTIVE,        // Shop is open for player interaction
+    SHOP_CLOSING,       // Brief pause after shop closes
+    WAVE_STARTING       // Brief pause before next wave begins
 };
 
 struct SpawnIndicator {
@@ -61,6 +70,13 @@ public:
         spawnIndicators.emplace_back(pos, duration, type);
     }
     
+    // Particle system (public for effect creation)
+    void createParticleBurst(Vector2 position, int particleCount, float particleSpeed,
+                            float normalDuration, SDL_Color color, float scale = 1.0f);
+    void createExplosionEffect(Vector2 position, SDL_Color color = {255, 255, 255, 255});
+    void createDeathEffect(Vector2 position, SDL_Color color = {255, 0, 0, 255});
+    void createImpactEffect(Vector2 position, SDL_Color color = {255, 255, 0, 255});
+    
     // Menu management
     void showPauseMenu();
     void showGameOverMenu();
@@ -84,11 +100,21 @@ private:
     void renderBombs();
     void checkBombExplosions();
     
+    // Particle system (private internal methods)
+    void updateParticles(float deltaTime);
+    void renderParticles();
+    SDL_Color getEnemyParticleColor(EnemyType enemyType);
+    
     // Item input handling
     void handleItemInput(const Uint8* keyState);
     void updateMaterialCollection();
     float getMaterialDropChance() const;
     void renderUI();
+    
+    // Wave transition state machine
+    void enterState(GameState newState);
+    void updateState(float deltaTime);
+    void renderStateUI();
     
     SDL_Window* window;
     SDL_Renderer* renderer;
@@ -101,6 +127,7 @@ private:
     std::vector<std::unique_ptr<ExperienceOrb>> experienceOrbs;
     std::vector<std::unique_ptr<Material>> materials;
     std::vector<std::unique_ptr<Bomb>> bombs;
+    std::vector<std::unique_ptr<Particle>> particles;
     
     float timeSinceLastSpawn;
     
@@ -131,6 +158,9 @@ private:
     // TTF Font system
     TTF_Font* defaultFont;
     
+    // Particle system
+    SDL_Texture* starTexture;
+    
     // Telegraph duration for spawn indicators (seconds)
     float spawnTelegraphSeconds = 2.0f;
     
@@ -144,4 +174,14 @@ private:
     void startBossWave(int waveIndex);
     void endBossWave(bool bossDefeated);
     bool isBossWaveIndex(int wave) const { return wave > 0 && (wave % BOSS_WAVE_INTERVAL) == 0; }
+    
+    // Wave transition state machine
+    GameState currentState;
+    float stateTimer;
+    float stateDuration;
+    
+    // Configuration constants for state durations
+    static const float WAVE_COMPLETED_DURATION;
+    static const float SHOP_CLOSING_DURATION;
+    static const float WAVE_STARTING_DURATION;
 };

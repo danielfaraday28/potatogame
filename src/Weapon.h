@@ -61,6 +61,9 @@ public:
     const WeaponStats& getStats() const { return stats; }
     bool canFire() const { return timeSinceLastShot >= stats.attackSpeed; }
     
+    // Reset firing cooldown (for wave start reloading)
+    void resetFiring() { timeSinceLastShot = stats.attackSpeed; }
+    
     // Calculate final damage with player stats
     int calculateDamage(const Player& player) const;
     

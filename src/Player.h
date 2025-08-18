@@ -46,8 +46,10 @@ public:
     void renderWeapons(SDL_Renderer* renderer);
     void initializeWeapons(SDL_Renderer* renderer);
     void removeWeaponAt(int index);
+    void reloadAllWeapons();
     
     Vector2 getPosition() const { return position; }
+    void setPosition(const Vector2& newPosition) { position = newPosition; }
     float getRadius() const { return radius; }
     int getHealth() const { return health; }
     void takeDamage(int damage);
