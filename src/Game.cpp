@@ -111,6 +111,16 @@ bool Game::init() {
         std::cout << "Loaded particle star texture" << std::endl;
     }
     
+    // Load item icons for UI reuse
+    texHealingBox = IMG_LoadTexture(renderer, "assets/items/healing_box.png");
+    texMassBomb = IMG_LoadTexture(renderer, "assets/items/mass_bomb.png");
+    if (!texHealingBox) {
+        std::cout << "Failed to load healing box icon: " << IMG_GetError() << std::endl;
+    }
+    if (!texMassBomb) {
+        std::cout << "Failed to load mass bomb icon: " << IMG_GetError() << std::endl;
+    }
+
     running = true;
     
     return true;
@@ -290,6 +300,9 @@ void Game::update(float deltaTime) {
         
         // Check wave completion
         if (waveTimer >= waveDuration) {
+            if (isBossWave) {
+                endBossWave(false);  // cleanup + consolation
+            }
             enterState(GameState::WAVE_COMPLETED);
             return;
         }
@@ -581,12 +594,23 @@ void Game::renderUI() {
         SDL_SetRenderDrawColor(renderer, 100, 110, 120, 255);
         SDL_RenderDrawRect(renderer, &slotRect);
         
-        // Draw item icon (placeholder for now)
+        // Draw item icon
         const Item* item = player->getItem(i);
         if (item) {
-            SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
-            SDL_Rect iconRect = {slotRect.x + 8, slotRect.y + 8, slotRect.w - 16, slotRect.h - 16};
-            SDL_RenderFillRect(renderer, &iconRect);
+            SDL_Texture* icon = nullptr;
+            switch (item->getType()) {
+                case ItemType::HEALING_BOX: icon = texHealingBox; break;
+                case ItemType::MASS_BOMB: icon = texMassBomb; break;
+            }
+            if (icon) {
+                SDL_Rect iconRect = {slotRect.x + 8, slotRect.y + 8, slotRect.w - 16, slotRect.h - 16};
+                SDL_RenderCopy(renderer, icon, nullptr, &iconRect);
+            } else {
+                // fallback
+                SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
+                SDL_Rect iconRect = {slotRect.x + 8, slotRect.y + 8, slotRect.w - 16, slotRect.h - 16};
+                SDL_RenderFillRect(renderer, &iconRect);
+            }
             
             // Draw keybind hint
             SDL_Color white = {255, 255, 255, 255};
@@ -820,22 +844,33 @@ void Game::startBossWave(int waveIndex) {
     
     // Создаем конфиг босса
     BossConfig config;
-    // Разные имена боссов в зависимости от волны
+    // Boss name per wave
     switch (waveIndex) {
-        case 3:
-            config.name = "MEGA SLIME";
-            break;
-        case 6:
-            config.name = "DARK PEBBLIN";
-            break;
-        case 9:
-            config.name = "MORTORHEAD PRIME";
-            break;
-        default:
-            config.name = "ANCIENT ONE";
-            break;
+        case 3:  config.name = "MEGA SLIME"; break;
+        case 6:  config.name = "DARK PEBBLIN"; break;
+        case 9:  config.name = "MORTORHEAD PRIME"; break;
+        default: config.name = "ANCIENT ONE"; break;
     }
     config.seed = static_cast<uint32_t>(waveIndex);
+
+    // Wave-based boss tuning (HP is effectively absolute since base = 1)
+    config.scale = 2.8f;
+    config.speedMul = 0.6f;
+    switch (waveIndex) {
+        case 3:
+            config.hpMul = 1200.f;
+            config.dmgMul = 2.0f;
+            break;
+        case 6:
+            config.hpMul = 2400.f;
+            config.dmgMul = 2.2f;
+            break;
+        case 9:
+        default:
+            config.hpMul = 3600.f;
+            config.dmgMul = 2.5f;
+            break;
+    }
     
     // Настраиваем паттерны в зависимости от типа босса
     if (waveIndex == 3) { // MEGA SLIME - прыгучий босс с круговыми атаками
@@ -960,27 +995,25 @@ void Game::startBossWave(int waveIndex) {
 
 void Game::endBossWave(bool bossDefeated) {
     isBossWave = false;
-    // Сохраняем позицию до сброса босса
     Vector2 rewardPos = boss ? boss->getPosition() : Vector2(WINDOW_WIDTH/2.f, WINDOW_HEIGHT/2.f);
     boss.reset();
-    
+
     if (bossDefeated) {
-        // Дроп наград
-        
-        // Опыт (в 10 раз больше чем от обычного врага)
+        // (unchanged) big reward
         for (int i = 0; i < 10; i++) {
             experienceOrbs.push_back(std::make_unique<ExperienceOrb>(rewardPos));
         }
-        
-        // Материалы (в 15 раз больше + бонус за волну)
         int materialCount = 15 + (wave / 3);
         for (int i = 0; i < materialCount; i++) {
             materials.push_back(std::make_unique<Material>(
                 rewardPos,
-                2 + (wave / 2),  // Увеличенное значение материалов
-                3 + (wave / 2)   // Увеличенное значение опыта
+                2 + (wave / 2),
+                3 + (wave / 2)
             ));
         }
+    } else {
+        // Consolation: small materials to keep economy flowing
+        materialBag += std::max(3, wave / 2);
     }
 }
 
@@ -1224,7 +1257,11 @@ void Game::handleItemInput(const Uint8* keyState) {
 }
 
 void Game::addBomb(Vector2 position, float timer, float radius, int damage) {
-    bombs.push_back(std::make_unique<Bomb>(position, timer, radius, damage));
+    auto b = std::make_unique<Bomb>(position, timer, radius, damage);
+    if (texMassBomb) {
+        b->setTexture(texMassBomb, false);
+    }
+    bombs.push_back(std::move(b));
 }
 
 void Game::updateBombs(float deltaTime) {
@@ -1247,11 +1284,19 @@ void Game::renderBombs() {
 
 void Game::checkBombExplosions() {
     for (auto& bomb : bombs) {
-        if (bomb->isExploded()) {
+        if (bomb->isExploded() && !bomb->hasAppliedDamage()) {
             Vector2 bombPos = bomb->getPosition();
             float bombRadius = bomb->getRadius();
             int bombDamage = bomb->getDamage();
             
+            // Damage boss in radius (bombs do 20x damage to bosses)
+            if (isBossWave && boss && boss->isAlive()) {
+                float bossDistance = bombPos.distance(boss->getPosition());
+                if (bossDistance <= bombRadius + boss->getRadius()) {
+                    boss->takeDamage(bombDamage * 20);
+                }
+            }
+
             // Damage enemies in radius
             for (auto& enemy : enemies) {
                 if (enemy->isAlive()) {
@@ -1265,6 +1310,9 @@ void Game::checkBombExplosions() {
                     }
                 }
             }
+
+            // Ensure we only apply damage once per explosion
+            bomb->markDamageApplied();
         }
     }
 }
@@ -1290,6 +1338,8 @@ void Game::cleanup() {
         window = nullptr;
     }
     
+    if (texHealingBox) { SDL_DestroyTexture(texHealingBox); texHealingBox = nullptr; }
+    if (texMassBomb) { SDL_DestroyTexture(texMassBomb); texMassBomb = nullptr; }
     TTF_Quit();
     IMG_Quit();
     SDL_Quit();

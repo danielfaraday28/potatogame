@@ -6,12 +6,12 @@
 
 Bomb::Bomb(Vector2 position, float timer, float radius, int damage)
     : position(position), timer(timer), maxTimer(timer), radius(radius),
-      damage(damage), exploded(false), alive(true), flashTimer(0.0f),
+      damage(damage), exploded(false), alive(true), damageApplied(false), ownsTexture(false), flashTimer(0.0f),
       flashInterval(0.2f), showFlash(false), bombTexture(nullptr) {
 }
 
 Bomb::~Bomb() {
-    if (bombTexture) {
+    if (bombTexture && ownsTexture) {
         SDL_DestroyTexture(bombTexture);
         bombTexture = nullptr;
     }
@@ -127,6 +127,7 @@ void Bomb::loadTexture(SDL_Renderer* renderer) {
     if (surface) {
         SDL_FillRect(surface, nullptr, SDL_MapRGB(surface->format, 255, 0, 0));
         bombTexture = SDL_CreateTextureFromSurface(renderer, surface);
+        ownsTexture = true;
         SDL_FreeSurface(surface);
     }
 }

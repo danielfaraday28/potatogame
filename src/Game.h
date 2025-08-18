@@ -13,6 +13,7 @@
 #include "Bomb.h"
 #include "Menu.h"
 #include "Particle.h"
+#include "Item.h"
 
 // Forward declarations
 class SlimeEnemy;
@@ -60,6 +61,13 @@ public:
     int getPlayerMaterials() const { return player ? player->getStats().materials : 0; }
     const Player* getPlayer() const { return player.get(); }
     SDL_Renderer* getRenderer() const { return renderer; }
+    SDL_Texture* getItemIcon(ItemType type) const {
+        switch (type) {
+            case ItemType::HEALING_BOX: return texHealingBox;
+            case ItemType::MASS_BOMB: return texMassBomb;
+        }
+        return nullptr;
+    }
     
     // Bomb management (public for item usage)
     void addBomb(Vector2 position, float timer, float radius, int damage);
@@ -110,6 +118,7 @@ private:
     void updateMaterialCollection();
     float getMaterialDropChance() const;
     void renderUI();
+    SDL_Texture* loadTexture(const char* path);
     
     // Wave transition state machine
     void enterState(GameState newState);
@@ -160,6 +169,10 @@ private:
     
     // Particle system
     SDL_Texture* starTexture;
+
+    // Item icons for UI and bombs
+    SDL_Texture* texHealingBox = nullptr;
+    SDL_Texture* texMassBomb = nullptr;
     
     // Telegraph duration for spawn indicators (seconds)
     float spawnTelegraphSeconds = 2.0f;

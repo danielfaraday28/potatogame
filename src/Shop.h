@@ -73,6 +73,7 @@ public:
     // Shop actions
     void buyItem(int index, Player& player);
     void sellOwnedWeapon(int ownedIndex, Player& player);
+    void sellOwnedItem(int ownedIndex, Player& player);
     void lockItem(int index);
     void reroll(Player& player, int waveNumber);
     
@@ -102,6 +103,8 @@ private:
     bool lastMousePressed;
     int selectedOwnedWeapon; // index of selected owned weapon in player's array (-1 if none)
     int hoveredOwnedWeapon;  // hover index for owned weapons
+    int selectedOwnedItem;   // index of selected owned item in player's array (-1 if none)
+    int hoveredOwnedItem;    // hover index for owned items
     
     Game* gameRef = nullptr; // Reference to game for text rendering
     

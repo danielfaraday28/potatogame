@@ -17,6 +17,7 @@ set(SOURCES
     src/PebblinEnemy.cpp
     src/Bullet.cpp
     src/Vector2.cpp
+    src/Particle.cpp
     src/ExperienceOrb.cpp
     src/Material.cpp
     src/Weapon.cpp
@@ -35,6 +36,7 @@ set(HEADERS
     src/PebblinEnemy.h
     src/Bullet.h
     src/Vector2.h
+    src/Particle.h
     src/ExperienceOrb.h
     src/Material.h
     src/Weapon.h

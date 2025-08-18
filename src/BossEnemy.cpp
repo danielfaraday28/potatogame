@@ -87,12 +87,12 @@ void BossEnemy::update(float dt, Vector2 playerPos, std::vector<std::unique_ptr<
                 break;
         }
         
-        // Уменьшаем кулдауны в зависимости от фазы
+        // Phase modifiers (lighter)
         if (phase == BossPhase::PHASE2) {
-            attackCooldown *= 0.8f;
+            attackCooldown *= 0.9f;
         }
         else if (phase == BossPhase::ENRAGE) {
-            attackCooldown *= 0.6f;
+            attackCooldown *= 0.8f;
         }
     }
 }
@@ -180,20 +180,12 @@ void BossEnemy::performPattern(float dt, std::vector<std::unique_ptr<Bullet>>& b
             break;
     }
     
-    // Уменьшаем кулдауны в зависимости от фазы
+    // Phase modifiers (lighter)
     if (phase == BossPhase::PHASE2) {
-        attackCooldown *= 0.8f;
+        attackCooldown *= 0.9f;
     }
     else if (phase == BossPhase::ENRAGE) {
-        attackCooldown *= 0.6f;
-    }
-    
-    // В более поздних фазах уменьшаем кулдауны
-    if (phase == BossPhase::PHASE2) {
         attackCooldown *= 0.8f;
-    }
-    else if (phase == BossPhase::ENRAGE) {
-        attackCooldown *= 0.6f;
     }
 }
 
@@ -231,25 +223,24 @@ void BossEnemy::patternRadialShots(std::vector<std::unique_ptr<Bullet>>& bullets
     float baseSpeed;
     
     if (isMegaSlime) {
-        baseNumBullets = 16;  // Больше пуль, медленнее
-        baseSpeed = 150.0f;
-    } else if (isDarkPebblin) {
-        baseNumBullets = 8;   // Меньше пуль (защитный паттерн)
-        baseSpeed = 250.0f;   // Но быстрее
-    } else {
         baseNumBullets = 12;
+        baseSpeed = 160.0f;
+    } else if (isDarkPebblin) {
+        baseNumBullets = 8;    // defensive pattern, fewer bullets
+        baseSpeed = 220.0f;
+    } else {
+        baseNumBullets = 10;
         baseSpeed = 200.0f;
     }
-    
-    const int numBullets = baseNumBullets + (phase == BossPhase::PHASE2 ? 4 : (phase == BossPhase::ENRAGE ? 8 : 0));
-    const float bulletSpeed = baseSpeed + (phase == BossPhase::PHASE2 ? 50.0f : (phase == BossPhase::ENRAGE ? 100.0f : 0.0f));
-    
-    // Создаем пули по кругу
+
+    const int numBullets = baseNumBullets + (phase == BossPhase::PHASE2 ? 3 : (phase == BossPhase::ENRAGE ? 6 : 0));
+    const float bulletSpeed = baseSpeed + (phase == BossPhase::PHASE2 ? 30.0f : (phase == BossPhase::ENRAGE ? 60.0f : 0.0f));
+
     for (int i = 0; i < numBullets; ++i) {
         float angle = (2.0f * 3.14159f * i) / numBullets;
         Vector2 direction(cos(angle), sin(angle));
         Vector2 bulletVelocity = direction * bulletSpeed;
-        float bulletRange = 750.0f; // Увеличенный радиус полёта для босса (было 250.0f)
+        float bulletRange = 600.0f;
         bullets.push_back(std::make_unique<Bullet>(position, bulletVelocity, damage, bulletRange, bulletSpeed, BulletType::PISTOL, true));
     }
 }
@@ -263,28 +254,25 @@ void BossEnemy::patternDashToPlayer() {
         // Количество рывков зависит от фазы
         int numDashes = 1 + (phase == BossPhase::PHASE2 ? 1 : (phase == BossPhase::ENRAGE ? 2 : 0));
         
-        // Телеграфим все точки рывка
-        float dashDistance = 400.0f; // Увеличили дистанцию в 2 раза (было 200)
+        float dashDistance = 300.0f; // was 400
         Vector2 dashEnd = position;
-        
         for (int i = 0; i < numDashes; i++) {
             dashEnd = dashEnd + direction * dashDistance;
-            telegraph(dashEnd, 96.0f, 1.0f); // Увеличили радиус телеграфа для соответствия дистанции
+            telegraph(dashEnd, 96.0f, 1.0f);
         }
-        
-        // Увеличиваем скорость для серии рывков
-        float dashSpeed = speed * 12.0f; // Увеличили базовую скорость (было 8)
-        if (phase == BossPhase::PHASE2) dashSpeed *= 1.4f; // Усилили множители
-        if (phase == BossPhase::ENRAGE) dashSpeed *= 1.8f;
+
+        float dashSpeed = speed * 8.0f; // was 12x
+        if (phase == BossPhase::PHASE2) dashSpeed *= 1.3f;
+        if (phase == BossPhase::ENRAGE) dashSpeed *= 1.6f;
         
         velocity = direction * dashSpeed;
     } else {
         // Для других боссов - обычный рывок
         telegraph(lastKnownPlayerPos, 64.0f, 1.0f);
         
-        float dashSpeed = speed * 5.0f;
-        if (phase == BossPhase::PHASE2) dashSpeed *= 1.2f;
-        if (phase == BossPhase::ENRAGE) dashSpeed *= 1.5f;
+        float dashSpeed = speed * 5.0f;  // unchanged or reduce to 4.5f if needed
+        if (phase == BossPhase::PHASE2) dashSpeed *= 1.15f;
+        if (phase == BossPhase::ENRAGE) dashSpeed *= 1.35f;
         
         velocity = direction * dashSpeed;
     }
@@ -357,22 +345,19 @@ void BossEnemy::patternBurstAim(std::vector<std::unique_ptr<Bullet>>& bullets) {
     
     bool isDarkPebblin = std::string(config.name) == "DARK PEBBLIN";
     
-    // Настройки в зависимости от типа босса
-    int baseBurstCount = isDarkPebblin ? 5 : 3;  // Dark Pebblin стреляет больше пуль
-    float baseBulletSpeed = isDarkPebblin ? 400.0f : 300.0f;  // И быстрее
-    
-    // Количество пуль в очереди зависит от фазы
-    int burstCount = baseBurstCount + (phase == BossPhase::PHASE2 ? 2 : (phase == BossPhase::ENRAGE ? 4 : 0));
+    int baseBurstCount = isDarkPebblin ? 4 : 3;    // was 5 for dark pebblin
+    float baseBulletSpeed = isDarkPebblin ? 300.0f : 260.0f;
+
+    int burstCount = baseBurstCount + (phase == BossPhase::PHASE2 ? 1 : (phase == BossPhase::ENRAGE ? 3 : 0));
     float bulletSpeed = baseBulletSpeed;
-    
-    // Создаем очередь пуль с небольшим разбросом
+
     for (int i = 0; i < burstCount; ++i) {
-        float spread = (static_cast<float>(rand()) / RAND_MAX - 0.5f) * 0.2f; // ~±0.1 рад
+        float spread = (static_cast<float>(rand()) / RAND_MAX - 0.5f) * 0.2f;
         float baseAngle = atan2(direction.y, direction.x);
         float angle = baseAngle + spread;
         Vector2 bulletDir(cos(angle), sin(angle));
         Vector2 bulletVelocity = bulletDir * bulletSpeed;
-        float bulletRange = 750.0f; // Увеличенный радиус полёта для босса (было 300.0f)
+        float bulletRange = 650.0f; // was 750
         bullets.push_back(std::make_unique<Bullet>(position, bulletVelocity, damage, bulletRange, bulletSpeed, BulletType::PISTOL, true));
     }
 }

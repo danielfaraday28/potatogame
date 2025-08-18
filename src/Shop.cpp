@@ -64,7 +64,7 @@ std::string ShopItem::getItemDescription(ItemType iType, int power) {
     return ss.str();
 }
 
-Shop::Shop() : active(false), rerollCount(0), currentWave(0), selectedItem(0), hoveredItem(-1), lastMousePressed(false), selectedOwnedWeapon(-1), hoveredOwnedWeapon(-1) {
+Shop::Shop() : active(false), rerollCount(0), currentWave(0), selectedItem(0), hoveredItem(-1), lastMousePressed(false), selectedOwnedWeapon(-1), hoveredOwnedWeapon(-1), selectedOwnedItem(-1), hoveredOwnedItem(-1) {
     for (int i = 0; i < 4; i++) {
         keyPressed[i] = false;
     }
@@ -217,11 +217,10 @@ void Shop::render(SDL_Renderer* renderer, int windowWidth, int windowHeight) {
         renderShopItem(renderer, items[i], x, y, itemWidth, itemHeight, selected || hovered, i);
     }
 
-    // Bottom-left Items inventory section (display slots like Brotato)
+    // Bottom-left Items inventory section (show owned items and allow selling)
     int itemsPanelY = shopY + shopHeight - 160;
-    renderTTFText(renderer, "Items", shopX + 20, itemsPanelY - 28, white, 18);
+    renderTTFText(renderer, "Items (click to sell for 50%)", shopX + 20, itemsPanelY - 28, white, 18);
 
-    // Draw 6 slots (placeholders until items are implemented)
     int slotSize = 56;
     int slotSpacing = 14;
     int slotsToShow = 6;
@@ -233,6 +232,28 @@ void Shop::render(SDL_Renderer* renderer, int windowWidth, int windowHeight) {
         SDL_RenderFillRect(renderer, &slotRect);
         SDL_SetRenderDrawColor(renderer, 120, 130, 150, 255);
         SDL_RenderDrawRect(renderer, &slotRect);
+        
+        if (gameRef && gameRef->getPlayer()) {
+            const Player* p = gameRef->getPlayer();
+            if (i < p->getItemCount()) {
+                const Item* item = p->getItem(i);
+                SDL_Texture* icon = nullptr;
+                if (item) {
+                    switch (item->getType()) {
+                        case ItemType::HEALING_BOX: icon = texHealingBox; break;
+                        case ItemType::MASS_BOMB: icon = texMassBomb; break;
+                    }
+                }
+                if (icon) {
+                    SDL_Rect ir = {sx + 8, sy + 8, slotSize - 16, slotSize - 16};
+                    SDL_RenderCopy(renderer, icon, nullptr, &ir);
+                }
+                if (selectedOwnedItem == i || hoveredOwnedItem == i) {
+                    SDL_SetRenderDrawColor(renderer, 200, 220, 255, 255);
+                    SDL_RenderDrawRect(renderer, &slotRect);
+                }
+            }
+        }
     }
 
     // Bottom-right: Owned weapons grid (player weapon array)
@@ -594,6 +615,18 @@ void Shop::sellOwnedWeapon(int ownedIndex, Player& player) {
     std::cout << "Sold weapon for " << sellValue << " materials" << std::endl;
 }
 
+void Shop::sellOwnedItem(int ownedIndex, Player& player) {
+    if (!gameRef) return;
+    if (ownedIndex < 0 || ownedIndex >= player.getItemCount()) return;
+    const Item* itm = player.getItem(ownedIndex);
+    if (!itm) return;
+    int price = calculateItemPrice(itm->getType(), itm->getPower(), currentWave);
+    int sellValue = std::max(1, price / 2);
+    player.getStats().materials += sellValue;
+    player.removeItem(ownedIndex);
+    std::cout << "Sold item for " << sellValue << " materials" << std::endl;
+}
+
 void Shop::lockItem(int index) {
     if (index >= items.size()) return;
     
@@ -785,6 +818,23 @@ void Shop::handleMouseInput(int mouseX, int mouseY, bool mousePressed, Player& p
                 if (i < (int)owned.size()) {
                     // Click to sell at 50%
                     sellOwnedWeapon(i, player);
+                }
+            }
+        }
+    }
+    
+    // Click detection for owned items (bottom-left panel)
+    int iSlotSize = 56; int iSlotSpacing = 14;
+    hoveredOwnedItem = -1; selectedOwnedItem = -1;
+    for (int i = 0; i < 6; i++) {
+        int sx = shopX + 20 + i * (iSlotSize + iSlotSpacing);
+        int sy = itemsPanelY2;
+        SDL_Rect slotRect = {sx, sy, iSlotSize, iSlotSize};
+        if (mouseX >= slotRect.x && mouseX <= slotRect.x + slotRect.w && mouseY >= slotRect.y && mouseY <= slotRect.y + slotRect.h) {
+            hoveredOwnedItem = i;
+            if (mousePressed && !lastMousePressed) {
+                if (i < player.getItemCount()) {
+                    sellOwnedItem(i, player);
                 }
             }
         }

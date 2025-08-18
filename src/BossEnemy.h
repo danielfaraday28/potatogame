@@ -22,10 +22,10 @@ enum class BossPattern {
 
 struct BossConfig {
     const char* name;
-    float scale = 3.0f;     // Увеличим размер
-    float hpMul = 5000.f;  // В 100 раз больше изначального HP
-    float dmgMul = 4.0f;   // Больше урона
-    float speedMul = 0.7f; // Чуть медленнее для баланса
+    float scale = 2.5f;
+    float hpMul = 1200.f;  // default baseline; overridden per wave below
+    float dmgMul = 2.0f;
+    float speedMul = 0.6f;
     std::vector<std::pair<BossPattern, float>> weightsP1;
     std::vector<std::pair<BossPattern, float>> weightsP2;
     std::vector<std::pair<BossPattern, float>> weightsEnrage;

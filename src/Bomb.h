@@ -12,6 +12,9 @@ public:
     void render(SDL_Renderer* renderer);
     bool isExploded() const { return exploded; }
     bool isAlive() const { return alive; }
+    bool hasAppliedDamage() const { return damageApplied; }
+    void markDamageApplied() { damageApplied = true; }
+    void setTexture(SDL_Texture* texture, bool owns) { bombTexture = texture; ownsTexture = owns; }
     
     Vector2 getPosition() const { return position; }
     float getRadius() const { return radius; }
@@ -25,6 +28,8 @@ private:
     int damage;
     bool exploded;
     bool alive;
+    bool damageApplied;
+    bool ownsTexture;
     
     // Visual states
     float flashTimer;
