@@ -787,6 +787,12 @@ void Game::startBossWave(int waveIndex) {
     // Очищаем всех обычных врагов при старте босс-волны
     enemies.clear();
     
+    // Reset player position to left bottom corner for boss waves
+    if (player) {
+        Vector2 newPlayerPos(100.0f, WINDOW_HEIGHT - 100.0f); // Left bottom corner with some margin
+        player->setPosition(newPlayerPos);
+    }
+    
     // Создаем конфиг босса
     BossConfig config;
     // Разные имена боссов в зависимости от волны
@@ -1434,7 +1440,17 @@ void Game::renderStateUI() {
             break;
             
         case GameState::WAVE_STARTING: {
-            std::string message = "WAVE " + std::to_string(wave) + " STARTING...";
+            std::string message;
+            if (isBossWaveIndex(wave)) {
+                // For boss waves, show the boss name
+                if (boss) {
+                    message = boss->getName();
+                } else {
+                    message = "BOSS WAVE STARTING...";
+                }
+            } else {
+                message = "WAVE " + std::to_string(wave) + " STARTING...";
+            }
             renderTTFText(message.c_str(), centerX - 149, centerY - 9, black, 32); // Shadow
             renderTTFText(message.c_str(), centerX - 150, centerY - 10, white, 32); // Main text
             break;

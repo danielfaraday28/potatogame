@@ -49,6 +49,7 @@ public:
     void reloadAllWeapons();
     
     Vector2 getPosition() const { return position; }
+    void setPosition(const Vector2& newPosition) { position = newPosition; }
     float getRadius() const { return radius; }
     int getHealth() const { return health; }
     void takeDamage(int damage);
