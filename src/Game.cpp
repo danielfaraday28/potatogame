@@ -13,10 +13,16 @@
 #include <string>
 #include <map>
 
+// State duration constants
+const float Game::WAVE_COMPLETED_DURATION = 2.0f;
+const float Game::SHOP_CLOSING_DURATION = 0.2f;  // Reduced from 1.0f
+const float Game::WAVE_STARTING_DURATION = 0.8f;  // Reduced from 2.0f
+
 Game::Game() : window(nullptr), renderer(nullptr), running(false), 
                timeSinceLastSpawn(0), score(0), wave(1), mousePos(0, 0),
                waveTimer(0), waveDuration(20.0f), waveActive(true), materialBag(0),
-               defaultFont(nullptr), fKeyPressed(false), rKeyPressed(false), shopJustClosed(false), gameOverShown(false) {
+               defaultFont(nullptr), fKeyPressed(false), rKeyPressed(false), shopJustClosed(false), gameOverShown(false),
+               currentState(GameState::WAVE_ACTIVE), stateTimer(0.0f), stateDuration(0.0f) {
 }
 
 Game::~Game() {
@@ -204,65 +210,70 @@ void Game::update(float deltaTime) {
         return;
     }
     
-    // Don't update game if shop is active
-    if (shop->isShopActive()) {
+    // Update state machine first
+    updateState(deltaTime);
+    
+    // During transition states, allow limited gameplay
+    if (currentState != GameState::WAVE_ACTIVE) {
+        // Allow player movement and interaction during transitions
+        player->update(deltaTime);
+        
+        // Update bullets (keep them moving)
+        for (auto& bullet : bullets) {
+            bullet->update(deltaTime);
+        }
+        
+        // Update and allow collection of items
+        updateExperienceCollection();
+        updateMaterialCollection();
+        
+        // Update experience orbs and materials for visual movement
+        for (auto& orb : experienceOrbs) {
+            orb->update(deltaTime);
+        }
+        for (auto& material : materials) {
+            material->update(deltaTime);
+        }
+        
+        // Check collisions (player invulnerable during transitions)
+        checkCollisions();
+        
+        // Clean up dead bullets
+        bullets.erase(std::remove_if(bullets.begin(), bullets.end(),
+            [](const std::unique_ptr<Bullet>& bullet) {
+                return !bullet->isAlive();
+            }), bullets.end());
+        
         return;
     }
     
-    // Update wave timer
+    // WAVE_ACTIVE state - full game logic
     if (waveActive) {
         waveTimer += deltaTime;
         
-        // Проверяем условие босс-волны в начале волны
+        // Check boss wave conditions
         if (isBossWaveIndex(wave) && !isBossWave && waveTimer < 1.0f) {
             startBossWave(wave);
-            // Очищаем все индикаторы спавна при старте босс-волны
             spawnIndicators.clear();
             timeSinceLastSpawn = 0;
         }
         
-        // Обновляем босса если он есть
+        // Update boss if present
         if (isBossWave && boss) {
             boss->update(deltaTime, player->getPosition(), bullets);
             
-            // Проверяем смерть босса
+            // Check boss death
             if (boss->isDead()) {
                 endBossWave(true);
-                
-                // Открываем магазин после победы
-                shop->openShop(wave);
-                wave++;
-                waveTimer = 0;
-                
-                if (waveDuration < 60.0f) {
-                    waveDuration += 5.0f;
-                    if (waveDuration > 60.0f) waveDuration = 60.0f;
-                }
+                enterState(GameState::WAVE_COMPLETED);
                 return;
             }
         }
         
+        // Check wave completion
         if (waveTimer >= waveDuration) {
-            // Wave completed - distribute bagged materials
-            if (materialBag > 0) {
-                player->gainMaterials(materialBag);
-                std::cout << "Collected " << materialBag << " materials from bag!" << std::endl;
-                materialBag = 0;
-            }
-            
-            // Open shop after wave completion
-            shop->openShop(wave);
-            
-            // Prepare for next wave
-            wave++;
-            waveTimer = 0;
-            std::cout << "Wave " << wave << " will start after shop" << std::endl;
-            
-            // Increase wave duration by 5 seconds each wave, capped at 60 seconds
-            if (waveDuration < 60.0f) {
-                waveDuration += 5.0f;
-                if (waveDuration > 60.0f) waveDuration = 60.0f;
-            }
+            enterState(GameState::WAVE_COMPLETED);
+            return;
         }
     }
     
@@ -433,6 +444,9 @@ void Game::render() {
     
     // Render shop on top if active
     shop->render(renderer, WINDOW_WIDTH, WINDOW_HEIGHT);
+    
+    // Render transition state UI
+    renderStateUI();
     
     // Render menu on top of everything if active
     menu->render(renderer, WINDOW_WIDTH, WINDOW_HEIGHT);
@@ -1035,11 +1049,13 @@ void Game::checkCollisions() {
     for (auto& bullet : bullets) {
         if (!bullet->isAlive()) continue;
         if (bullet->isEnemyOwned()) {
-            // enemy bullets damage the player
-            float d = bullet->getPosition().distance(player->getPosition());
-            if (d < bullet->getRadius() + player->getRadius()) {
-                player->takeDamage(bullet->getDamage());
-                bullet->destroy();
+            // enemy bullets damage the player (only during active wave)
+            if (currentState == GameState::WAVE_ACTIVE) {
+                float d = bullet->getPosition().distance(player->getPosition());
+                if (d < bullet->getRadius() + player->getRadius()) {
+                    player->takeDamage(bullet->getDamage());
+                    bullet->destroy();
+                }
             }
             continue;
         }
@@ -1264,6 +1280,11 @@ void Game::restartGame() {
     timeSinceLastSpawn = 0;
     gameOverShown = false; // Reset game over flag
     
+    // Reset state machine
+    currentState = GameState::WAVE_ACTIVE;
+    stateTimer = 0.0f;
+    stateDuration = 0.0f;
+    
     // Сбрасываем состояние босс-волны
     isBossWave = false;
     boss.reset();
@@ -1292,4 +1313,136 @@ void Game::exitGame() {
 
 bool Game::isGamePaused() const {
     return menu->isMenuActive();
+}
+
+void Game::enterState(GameState newState) {
+    currentState = newState;
+    stateTimer = 0.0f;
+    
+    switch (newState) {
+        case GameState::WAVE_COMPLETED:
+            stateDuration = WAVE_COMPLETED_DURATION;
+            // Clear all enemies from the map
+            enemies.clear();
+            // Keep bullets on screen - don't clear them
+            // Clear spawn indicators to prevent late spawns
+            spawnIndicators.clear();
+            // Distribute bagged materials to player
+            if (materialBag > 0) {
+                player->gainMaterials(materialBag);
+                std::cout << "Collected " << materialBag << " materials from bag!" << std::endl;
+                materialBag = 0;
+            }
+            // Increment wave number and prepare for next wave
+            wave++;
+            waveTimer = 0;
+            // Increase wave duration for next wave
+            if (waveDuration < 60.0f) {
+                waveDuration += 5.0f;
+                if (waveDuration > 60.0f) waveDuration = 60.0f;
+            }
+            std::cout << "Wave " << wave - 1 << " completed!" << std::endl;
+            break;
+            
+        case GameState::SHOP_ACTIVE:
+            stateDuration = 0.0f; // Indefinite until player closes shop
+            shop->openShop(wave);
+            std::cout << "Shop opened after wave " << wave << std::endl;
+            break;
+            
+        case GameState::SHOP_CLOSING:
+            stateDuration = SHOP_CLOSING_DURATION;
+            shop->closeShop();
+            break;
+            
+        case GameState::WAVE_STARTING:
+            stateDuration = WAVE_STARTING_DURATION;
+            // Reset spawn timer
+            timeSinceLastSpawn = 0;
+            // Reload all weapons at wave start
+            if (player) {
+                player->reloadAllWeapons();
+            }
+            std::cout << "Wave " << wave << " starting..." << std::endl;
+            break;
+            
+        case GameState::WAVE_ACTIVE:
+            stateDuration = 0.0f; // Indefinite until wave completes
+            std::cout << "Wave " << wave << " active!" << std::endl;
+            break;
+    }
+}
+
+void Game::updateState(float deltaTime) {
+    stateTimer += deltaTime;
+    
+    // Check for automatic state transitions
+    switch (currentState) {
+        case GameState::WAVE_COMPLETED:
+            if (stateTimer >= stateDuration) {
+                enterState(GameState::SHOP_ACTIVE);
+            }
+            break;
+            
+        case GameState::SHOP_ACTIVE:
+            // Transition handled when shop is closed
+            if (!shop->isShopActive()) {
+                enterState(GameState::SHOP_CLOSING);
+            }
+            break;
+            
+        case GameState::SHOP_CLOSING:
+            if (stateTimer >= stateDuration) {
+                enterState(GameState::WAVE_STARTING);
+            }
+            break;
+            
+        case GameState::WAVE_STARTING:
+            if (stateTimer >= stateDuration) {
+                enterState(GameState::WAVE_ACTIVE);
+            }
+            break;
+            
+        case GameState::WAVE_ACTIVE:
+            // Transition handled when wave timer completes
+            break;
+    }
+}
+
+void Game::renderStateUI() {
+    if (currentState == GameState::WAVE_ACTIVE || currentState == GameState::SHOP_ACTIVE) {
+        return; // No special state UI during active gameplay or shop
+    }
+    
+    // No black overlay - just render text messages over the game field
+    SDL_Color white = {255, 255, 255, 255};
+    SDL_Color black = {0, 0, 0, 255};
+    int centerX = WINDOW_WIDTH / 2;
+    int centerY = WINDOW_HEIGHT / 2;
+    
+    switch (currentState) {
+        case GameState::WAVE_COMPLETED: {
+            std::string message = "WAVE " + std::to_string(wave - 1) + " COMPLETED!";
+            // Draw text with black outline for better visibility
+            renderTTFText(message.c_str(), centerX - 149, centerY - 19, black, 36); // Shadow
+            renderTTFText(message.c_str(), centerX - 150, centerY - 20, white, 36); // Main text
+            break;
+        }
+            
+        case GameState::SHOP_CLOSING:
+            // No message needed during shop closing
+            break;
+            
+        case GameState::WAVE_STARTING: {
+            std::string message = "WAVE " + std::to_string(wave) + " STARTING...";
+            renderTTFText(message.c_str(), centerX - 149, centerY - 9, black, 32); // Shadow
+            renderTTFText(message.c_str(), centerX - 150, centerY - 10, white, 32); // Main text
+            break;
+        }
+        
+        case GameState::SHOP_ACTIVE:
+        case GameState::WAVE_ACTIVE:
+            // No overlay message for these states
+            break;
+    }
 }

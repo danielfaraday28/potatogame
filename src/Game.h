@@ -24,6 +24,14 @@ enum class EnemySpawnType {
     PEBBLIN
 };
 
+enum class GameState {
+    WAVE_ACTIVE,        // Normal wave gameplay
+    WAVE_COMPLETED,     // Wave just ended, showing completion message
+    SHOP_ACTIVE,        // Shop is open for player interaction
+    SHOP_CLOSING,       // Brief pause after shop closes
+    WAVE_STARTING       // Brief pause before next wave begins
+};
+
 struct SpawnIndicator {
     Vector2 position;
     float elapsed;
@@ -90,6 +98,11 @@ private:
     float getMaterialDropChance() const;
     void renderUI();
     
+    // Wave transition state machine
+    void enterState(GameState newState);
+    void updateState(float deltaTime);
+    void renderStateUI();
+    
     SDL_Window* window;
     SDL_Renderer* renderer;
     bool running;
@@ -144,4 +157,14 @@ private:
     void startBossWave(int waveIndex);
     void endBossWave(bool bossDefeated);
     bool isBossWaveIndex(int wave) const { return wave > 0 && (wave % BOSS_WAVE_INTERVAL) == 0; }
+    
+    // Wave transition state machine
+    GameState currentState;
+    float stateTimer;
+    float stateDuration;
+    
+    // Configuration constants for state durations
+    static const float WAVE_COMPLETED_DURATION;
+    static const float SHOP_CLOSING_DURATION;
+    static const float WAVE_STARTING_DURATION;
 };
